@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "outDir": "dist",
+    "rootDir": "src",
+    "moduleResolution": "Node16",
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": ["src"]
+}

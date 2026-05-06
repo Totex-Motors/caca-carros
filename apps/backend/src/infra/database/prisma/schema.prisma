@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WantedCarStatus {
+  PENDING
+  FOUND
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
+model WantedCar {
+  id        String          @id @default(uuid())
+  brand     String
+  model     String
+  yearFrom  Int             @map("year")
+  yearTo    Int?            @map("year_to")
+  mileageFrom Int?          @map("mileage_from")
+  mileageTo Int?            @map("mileage_to")
+  maxPrice  Int             @map("max_price")
+  status    WantedCarStatus @default(PENDING)
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  cars Car[]
+
+  @@map("wanted_cars")
+}
+
+model Car {
+  id          String   @id @default(uuid())
+  brand       String
+  model       String
+  year        Int
+  price       Int
+  mileage     Int?
+  fuel        String?
+  url         String
+  image       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  deletedAt   DateTime? @map("deleted_at")
+  wantedCarId String   @map("wanted_car_id")
+  wantedCar   WantedCar @relation(fields: [wantedCarId], references: [id], onDelete: Cascade)
+
+  @@unique([wantedCarId, url])
+  @@index([wantedCarId])
+  @@index([createdAt])
+  @@map("cars")
+}

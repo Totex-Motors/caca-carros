@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: caca_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: caca_carros
+    ports:
+      - "5433:5432"
+    volumes:
+      - caca_postgres_data:/var/lib/postgresql/data
+    networks:
+      - caca_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d caca_carros"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: caca_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 3333
+      CORS_ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/caca_carros?schema=public
+      JWT_SECRET: dev-jwt-secret-change-me
+      JWT_EXPIRES_IN: 8h
+      ADMIN_EMAIL: admin@caca.local
+      ADMIN_PASSWORD: admin123
+      APIFY_TOKEN: apify_api_1pmusJzlhwDgayGkFOZ3zDEpe3Poob4BNQGe
+      APIFY_ACTOR_ID: stealth_mode/webmotors-auto-search-scraper
+      OLX_STATE: sp
+      OLX_ADS_LIMIT: "10"
+      APIFY_TIMEOUT_MS: "180000"
+      CAR_SEARCH_CRON: 0 */6 * * *
+      CAR_CLEANUP_CRON: 0 3 * * *
+      CAR_RETENTION_DAYS: "30"
+    ports:
+      - "3333:3333"
+    networks:
+      - caca_network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3333', (r) => {if (r.statusCode !== 404) throw new Error(r.statusCode)})"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: caca_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    networks:
+      - caca_network
+    environment:
+      VITE_API_URL: http://backend:3333
+
+volumes:
+  caca_postgres_data:
+
+networks:
+  caca_network:
+    driver: bridge
