@@ -1,10 +1,12 @@
 export type ExternalCar = {
-  brand: string;
-  model: string;
-  year: number;
+  title: string;
   price: number;
-  mileage: number | null;
-  fuel: string | null;
+  year: number;
+  km: number | null;
+  fuel_type: string | null;
+  transmission: string | null;
+  city: string | null;
+  state: string | null;
+  photos: string[];
   url: string;
-  image: string | null;
 };

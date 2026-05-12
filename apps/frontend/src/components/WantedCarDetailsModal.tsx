@@ -1,13 +1,27 @@
 import { useEffect } from 'react';
-import type { WantedCarDTO } from '@caca/shared/types/car';
+import type { CarDTO, WantedCarDTO } from '@caca/shared/types/car';
 import { CarList } from './CarList';
 
 type WantedCarDetailsModalProps = {
   wantedCar: WantedCarDTO;
-  loading: boolean;
+  cars: CarDTO[];
+  carsTotal: number;
+  carsPage: number;
+  carsPageSize: number;
+  carsLoading: boolean;
+  carsError: string | null;
+  autoSearchLoading: boolean;
+  autoSearchNotice: string | null;
+  statusLoading: boolean;
+  statusError: string | null;
   onClose: () => void;
-  onSearch: () => void;
+  onAutoSearch: () => void;
+  onMarkBought: () => void;
+  onArchive: () => void;
+  onPageChange: (page: number) => void;
 };
+
+const MAX_PRICE_FALLBACK = 2147483647;
 
 function formatRange(minValue: number | null, maxValue: number | null, suffix = ''): string {
   if (minValue === null && maxValue === null) return 'Não informado';
@@ -16,7 +30,45 @@ function formatRange(minValue: number | null, maxValue: number | null, suffix = 
   return `Até ${maxValue?.toLocaleString('pt-BR')}${suffix}`;
 }
 
-export function WantedCarDetailsModal({ wantedCar, loading, onClose, onSearch }: WantedCarDetailsModalProps) {
+function formatMaxPrice(value: number): string {
+  if (!Number.isFinite(value) || value >= MAX_PRICE_FALLBACK) return 'Sem limite';
+  return `R$ ${value.toLocaleString('pt-BR')}`;
+}
+
+function formatStatus(status: WantedCarDTO['status']): string {
+  switch (status) {
+    case 'PENDING':
+      return 'Em espera';
+    case 'FOUND':
+      return 'Encontrado';
+    case 'BOUGHT':
+      return 'Comprado';
+    case 'ARCHIVED':
+      return 'Removido';
+    default:
+      return status;
+  }
+}
+
+export function WantedCarDetailsModal({
+  wantedCar,
+  cars,
+  carsTotal,
+  carsPage,
+  carsPageSize,
+  carsLoading,
+  carsError,
+  autoSearchLoading,
+  autoSearchNotice,
+  statusLoading,
+  statusError,
+  onClose,
+  onAutoSearch,
+  onMarkBought,
+  onArchive,
+  onPageChange
+}: WantedCarDetailsModalProps) {
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
@@ -27,6 +79,11 @@ export function WantedCarDetailsModal({ wantedCar, loading, onClose, onSearch }:
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
+
+  const totalPages = carsTotal > 0 ? Math.ceil(carsTotal / carsPageSize) : 0;
+  const canGoPrev = carsPage > 1;
+  const canGoNext = carsPage < totalPages;
+  const isBought = wantedCar.status === 'BOUGHT';
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -46,25 +103,69 @@ export function WantedCarDetailsModal({ wantedCar, loading, onClose, onSearch }:
             <div className="modal-section-title">Detalhes cadastrados</div>
             <div className="detail-row"><span>Ano</span><strong>{formatRange(wantedCar.yearFrom, wantedCar.yearTo)}</strong></div>
             <div className="detail-row"><span>KM</span><strong>{formatRange(wantedCar.mileageFrom, wantedCar.mileageTo, ' km')}</strong></div>
-            <div className="detail-row"><span>Preço máximo</span><strong>R$ {wantedCar.maxPrice.toLocaleString('pt-BR')}</strong></div>
-            <div className="detail-row"><span>Status</span><strong>{wantedCar.status}</strong></div>
-            <div className="detail-row"><span>Anúncios encontrados</span><strong>{wantedCar.cars?.length ?? 0}</strong></div>
+            <div className="detail-row"><span>Preço máximo</span><strong>{formatMaxPrice(wantedCar.maxPrice)}</strong></div>
+            <div className="detail-row"><span>Status</span><strong>{formatStatus(wantedCar.status)}</strong></div>
+            <div className="detail-row"><span>Anúncios encontrados</span><strong>{carsTotal}</strong></div>
             <div className="detail-row"><span>Adicionado em</span><strong>{new Date(wantedCar.createdAt).toLocaleString('pt-BR')}</strong></div>
           </div>
 
           <div className="modal-panel modal-actions-panel">
-            <div className="modal-section-title">Ações</div>
-            <button disabled={loading} onClick={onSearch}>
-              {loading ? 'Buscando...' : 'Buscar agora'}
-            </button>
-            <div className="muted">A busca atualiza esta janela com os anúncios novos encontrados para este carro.</div>
+            {isBought ? (
+              <div>
+                <div className="modal-section-title">Ações</div>
+                <div className="muted">Carro comprado. Ações desativadas.</div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <div className="modal-section-title">Ações</div>
+                  <button type="button" disabled={autoSearchLoading} onClick={onAutoSearch}>
+                    {autoSearchLoading ? 'Buscando...' : 'Buscar anuncios automaticamente'}
+                  </button>
+                  <div className="muted">A busca consome creditos da Apify e pode levar alguns segundos.</div>
+                  {autoSearchNotice && <div className="muted">{autoSearchNotice}</div>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button type="button" disabled={statusLoading} onClick={onMarkBought}>
+                    {statusLoading ? 'Atualizando...' : 'Marcar como comprado'}
+                  </button>
+                  <button type="button" className="secondary" disabled={statusLoading} onClick={onArchive}>
+                    {statusLoading ? 'Atualizando...' : 'Remover da lista'}
+                  </button>
+                </div>
+                {statusError && <div className="error" style={{ marginTop: 8 }}>{statusError}</div>}
+              </>
+            )}
           </div>
         </div>
 
-        <div className="modal-section-title" style={{ marginTop: 20 }}>Anúncios encontrados</div>
+        <div className="modal-section-title" style={{ marginTop: 20 }}>Anuncios encontrados</div>
+        {carsTotal > 0 && (
+          <div className="muted">
+            Mostrando {cars.length} de {carsTotal} anuncios.
+          </div>
+        )}
         <div className="modal-results">
-          <CarList cars={wantedCar.cars ?? []} />
+          {carsLoading ? (
+            <div className="muted">Carregando anuncios...</div>
+          ) : (
+            <CarList cars={cars} />
+          )}
+          {carsError && <div className="error" style={{ marginTop: 8 }}>{carsError}</div>}
         </div>
+        {carsTotal > carsPageSize && (
+          <div className="pagination">
+            <button className="secondary" disabled={!canGoPrev || carsLoading} onClick={() => onPageChange(carsPage - 1)}>
+              Anterior
+            </button>
+            <div className="pagination-info">
+              Pagina {carsPage} de {totalPages}
+            </div>
+            <button className="secondary" disabled={!canGoNext || carsLoading} onClick={() => onPageChange(carsPage + 1)}>
+              Proxima
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

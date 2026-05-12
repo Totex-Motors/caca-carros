@@ -1,4 +1,4 @@
-export type WantedCarStatus = 'PENDING' | 'FOUND';
+export type WantedCarStatus = 'PENDING' | 'FOUND' | 'BOUGHT' | 'ARCHIVED';
 
 export type JwtToken = string;
 
@@ -17,15 +17,14 @@ export type WantedCarDTO = {
 };
 
 export type CarDTO = {
-  id: string;
-  brand: string;
-  model: string;
+  title: string;
   year: number;
   price: number;
-  mileage: number | null;
-  fuel: string | null;
+  km: number | null;
+  fuel_type: string | null;
+  transmission: string | null;
+  city: string | null;
+  state: string | null;
+  photos: string[];
   url: string;
-  image: string | null;
-  createdAt: string;
-  wantedCarId: string;
 };
