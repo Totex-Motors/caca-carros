@@ -10,6 +10,13 @@ datasource db {
 enum WantedCarStatus {
   PENDING
   FOUND
+  BOUGHT
+  ARCHIVED
+}
+
+enum WantedCarCondition {
+  NEW
+  USED
 }
 
 model User {
@@ -25,6 +32,7 @@ model WantedCar {
   id        String          @id @default(uuid())
   brand     String
   model     String
+  condition WantedCarCondition? @map("condition")
   yearFrom  Int             @map("year")
   yearTo    Int?            @map("year_to")
   mileageFrom Int?          @map("mileage_from")
@@ -42,10 +50,15 @@ model Car {
   id          String   @id @default(uuid())
   brand       String
   model       String
+  title       String?
   year        Int
   price       Int
   mileage     Int?
   fuel        String?
+  transmission String?
+  city        String?
+  state       String?
+  photos      String[] @default([])
   url         String
   image       String?
   createdAt   DateTime @default(now()) @map("created_at")

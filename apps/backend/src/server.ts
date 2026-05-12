@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { authRoutes } from './modules/auth/routes/auth.routes';
-import { carsRoutes } from './modules/cars/routes/cars.routes';
+import { carsRoutes } from './modules/cars/routes/search-car.routes';
 import { startCarCleanupJob, startCarSearchJob } from './infra/jobs/car-search.job';
 
 dotenv.config();
@@ -14,7 +14,7 @@ const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
 app.use(
   cors({
     origin: corsOrigin,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
   })
 );

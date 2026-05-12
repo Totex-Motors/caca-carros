@@ -1,6 +1,6 @@
-# Caça Carros (OLX)
+# Caça Carros (Webmotors)
 
-Monorepo com **backend** (Node.js + TypeScript + Express + Prisma/PostgreSQL) e **frontend** (React + Vite) para cadastrar carros desejados e buscar anúncios via Apify (OLX scraper).
+Monorepo com **backend** (Node.js + TypeScript + Express + Prisma/PostgreSQL) e **frontend** (React + Vite) para cadastrar carros desejados e buscar anuncios via Apify (Webmotors scraper).
 
 ## Requisitos
 
@@ -20,10 +20,10 @@ npm install
 - Backend: copie `apps/backend/.env.example` para `apps/backend/.env`
 - Frontend: copie `apps/frontend/.env.example` para `apps/frontend/.env`
 
-Observações:
+Observacoes:
 
 - Para a busca externa funcionar, configure `APIFY_TOKEN` no backend.
-- O job de busca roda por padrão a cada 6 horas (`CAR_SEARCH_CRON`), mas você pode trocar por um cron a cada X minutos (ex.: `*/10 * * * *`).
+- O job de busca roda por padrao a cada 6 horas (`CAR_SEARCH_CRON`), mas voce pode trocar por um cron a cada X minutos (ex.: `*/10 * * * *`).
 
 3) Suba o PostgreSQL (Docker):
 
@@ -53,3 +53,4 @@ Backend: `http://localhost:3333`
 - `POST /cars/wanted`
 - `POST /cars/search-external`
 - `GET /cars/wanted`
+- `GET /cars/wanted/:id/cars`

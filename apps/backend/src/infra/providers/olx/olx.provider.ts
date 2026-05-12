@@ -140,22 +140,30 @@ export class OlxProvider {
         if (mileage < (params.mileageFrom as number) || mileage > (params.mileageTo as number)) continue;
       }
 
-      let image: string | null = null;
-      const photos = (item as ApifyOlxItem).photos;
-      if (Array.isArray(photos) && photos.length > 0) {
-        const first = photos[0];
-        if (typeof first === 'string') image = first;
+      const rawPhotos = (item as ApifyOlxItem).photos;
+      const photos: string[] = [];
+      if (Array.isArray(rawPhotos)) {
+        for (const entry of rawPhotos) {
+          if (typeof entry === 'string' && entry.startsWith('http')) {
+            photos.push(entry);
+          }
+        }
       }
 
+      const rawTitle = (item as ApifyOlxItem).title;
+      const title = isNonEmptyString(rawTitle) ? rawTitle : `${brandValue} ${modelValue}`.trim();
+
       normalized.push({
-        url: urlValue,
-        brand: brandValue,
-        model: modelValue,
-        year,
+        title,
         price,
-        mileage,
-        fuel,
-        image
+        year,
+        km: mileage ?? null,
+        fuel_type: fuel ?? null,
+        transmission: null,
+        city: null,
+        state: null,
+        photos,
+        url: urlValue
       });
     }
 

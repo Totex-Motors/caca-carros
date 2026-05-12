@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../infra/http/async-handler';
 import { authMiddleware } from '../../../middlewares/auth.middleware';
-import { SearchCarController } from '../controllers/searchcar.controller';
+import { SearchCarController } from '../controllers/search-car.controller';
 
 export const carsRoutes = Router();
 
@@ -11,4 +11,6 @@ carsRoutes.use(authMiddleware);
 
 carsRoutes.post('/wanted', asyncHandler((req, res) => controller.createWanted(req, res)));
 carsRoutes.post('/search-external', asyncHandler((req, res) => controller.manualSearch(req, res)));
+carsRoutes.patch('/wanted/:id/status', asyncHandler((req, res) => controller.updateWantedStatus(req, res)));
 carsRoutes.get('/wanted', asyncHandler((req, res) => controller.listWanted(req, res)));
+carsRoutes.get('/wanted/:id/cars', asyncHandler((req, res) => controller.listWantedCars(req, res)));

@@ -1,15 +1,26 @@
 import cron from 'node-cron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../database/prisma/client';
-import { SearchExternalCarsService } from '../../core/cars/services/search-external-cars.service';
+import { mapExternalCarToCreateInput } from '../../core/cars/mappers/external-car.mapper';
+import { SearchCarService } from '../../core/cars/services/search-car.service';
+
+function isExternalSearchEnabled(): boolean {
+  const flag = process.env.EXTERNAL_SEARCH_ENABLED ?? 'false';
+  return flag.toLowerCase() === 'true';
+}
 
 export function startCarSearchJob() {
+  if (!isExternalSearchEnabled()) {
+    console.log('[car-search.job] external search disabled');
+    return;
+  }
+
   const expression = process.env.CAR_SEARCH_CRON ?? '0 */6 * * *';
   if (!cron.validate(expression)) {
     throw new Error(`Invalid CAR_SEARCH_CRON: ${expression}`);
   }
 
-  const service = new SearchExternalCarsService();
+  const service = new SearchCarService();
 
   cron.schedule(
     expression,
@@ -25,24 +36,16 @@ export function startCarSearchJob() {
             yearTo: wanted.yearTo,
             mileageFrom: wanted.mileageFrom,
             mileageTo: wanted.mileageTo,
-            maxPrice: wanted.maxPrice
+            maxPrice: wanted.maxPrice,
+            city: null,
+            state: null
           });
 
           if (results.length === 0) continue;
 
           await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
             await tx.car.createMany({
-              data: results.map((car) => ({
-                brand: car.brand,
-                model: car.model,
-                year: car.year,
-                price: car.price,
-                mileage: car.mileage ?? undefined,
-                fuel: car.fuel ?? undefined,
-                url: car.url,
-                image: car.image ?? undefined,
-                wantedCarId: wanted.id
-              })),
+              data: results.map((car) => mapExternalCarToCreateInput(car, wanted)),
               skipDuplicates: true
             });
 
