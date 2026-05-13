@@ -10,8 +10,7 @@
       "Bash(xargs grep -l \"APIFY\\\\|WEBMOTORS\")",
       "WebFetch(domain:apify.com)",
       "Bash(git -C \"C:\\\\Users\\\\USER\\\\Desktop\\\\ca-a-carros\" diff HEAD -- \"apps/backend/src/infra/providers/apify/apify-cars.provider.ts\")",
-      "Bash(git *)",
-      "Bash(npx tsc *)"
+      "Bash(git *)"
     ]
   }
 }
