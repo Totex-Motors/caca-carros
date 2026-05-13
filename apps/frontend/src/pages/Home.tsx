@@ -135,7 +135,7 @@ function formatCondition(condition: WantedCarCondition | null): string {
 const FIPE_TRIM_MARKERS = new Set([
   'xrx', 'xre', 'xlt', 'xle', 'xse', 'xrs', 'xr', 'xs', 'xl', 'xe',
   'gli', 'gts', 'gt', 'gti', 'ltd', 'ltz', 'lt', 'le', 'se', 'ex', 'exl', 'lx', 'lxs', 'ls',
-  'sl', 'sv', 'sx', 'at', 'mt', 'cvt', 'dct', 'dsg', 'awd',
+  'sl', 'sv', 'sx', 'at', 'aut', 'auto', 'automatico', 'automatica', 'mt', 'cvt', 'dct', 'dsg', 'awd',
   'tsi', 'tfsi', 'mpi', 'tdi', 'tb',
   'sense', 'advance', 'exclusive', 'way', 'sport', 'premium', 'touring', 'limited',
   'comfortline', 'highline', 'trendline', 'sportline', 'trailhawk', 'longitude',
