@@ -240,11 +240,6 @@ export function Home() {
     [parsedGroups, form.baseModelName]
   );
 
-  const selectedVariant = useMemo(
-    () => selectedGroup?.variants.find((v) => v.code === form.variantCode) ?? null,
-    [selectedGroup, form.variantCode]
-  );
-
   const selectedYearFrom = useMemo(
     () => years.find((year) => year.code === form.yearFromCode) ?? null,
     [years, form.yearFromCode]
