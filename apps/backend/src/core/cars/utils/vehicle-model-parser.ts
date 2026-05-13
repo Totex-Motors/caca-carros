@@ -458,8 +458,8 @@ export async function parseVehicleModelAndVersion(brand: string, rawModel: strin
     : null;
 
   if (matchedModel) {
-    const officialModelTokens = splitTokens(normalizeComparable(matchedModel.nome));
-    const versionTailTokens = brandStrippedOriginalTokens.slice(officialModelTokens.length);
+    const officialOriginalTokenCount = splitTokens(stripParenthesesKeepingContent(matchedModel.nome)).length;
+    const versionTailTokens = brandStrippedOriginalTokens.slice(officialOriginalTokenCount);
     const splitOfficial =
       inferOfficialModelFamilySplit(matchedModel.nome, modelCandidates) ??
       splitModelAndInlineVersion(splitTokens(stripParenthesesKeepingContent(matchedModel.nome)));

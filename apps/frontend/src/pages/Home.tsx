@@ -9,7 +9,8 @@ type WantedCarView = WantedCarDTO & { version: string | null };
 
 type CreateWantedInput = {
   brandCode: string;
-  modelCode: string;
+  baseModelName: string;
+  variantCode: string;
   version: string;
   condition: WantedCarCondition | '';
   yearFromCode: string;
@@ -23,6 +24,17 @@ type FipeYearOption = {
   code: string;
   label: string;
   year: number;
+};
+
+type ParsedVariant = {
+  code: string;
+  label: string;
+  version: string | null;
+};
+
+type ParsedModelGroup = {
+  baseName: string;
+  variants: ParsedVariant[];
 };
 
 type PaginatedCarsResponse = {
@@ -40,17 +52,13 @@ type ManualSearchResponse = {
   message: string;
 };
 
-type VersionOption = {
-  label: string;
-  value: string;
-};
-
 const MAX_PRICE_FALLBACK = 2147483647;
 
 function createEmptyForm(): CreateWantedInput {
   return {
     brandCode: '',
-    modelCode: '',
+    baseModelName: '',
+    variantCode: '',
     version: '',
     condition: '',
     yearFromCode: '',
@@ -124,53 +132,18 @@ function formatCondition(condition: WantedCarCondition | null): string {
   }
 }
 
-const VERSION_IGNORE_WORDS = new Set([
-  'turbo',
-  'flex',
-  'gasolina',
-  'diesel',
-  'hibrido',
-  'hibrida',
-  'hybrid',
-  'eletrico',
-  'eletrica',
-  'electric',
-  'phev',
-  'hev',
-  'ev',
-  'plugin',
-  'plug'
+const FIPE_TRIM_MARKERS = new Set([
+  'xrx', 'xre', 'xlt', 'xle', 'xse', 'xrs', 'xr', 'xs', 'xl', 'xe',
+  'gli', 'gts', 'gt', 'gti', 'ltd', 'ltz', 'lt', 'le', 'se', 'ex', 'exl', 'lx', 'lxs', 'ls',
+  'sl', 'sv', 'sx', 'at', 'mt', 'cvt', 'dct', 'dsg', 'awd',
+  'tsi', 'tfsi', 'mpi', 'tdi', 'tb',
+  'sense', 'advance', 'exclusive', 'way', 'sport', 'premium', 'touring', 'limited',
+  'comfortline', 'highline', 'trendline', 'sportline', 'trailhawk', 'longitude',
+  'turbo', 'flex', 'gasolina', 'diesel', 'hibrido', 'hibrida', 'hybrid',
+  'eletrico', 'eletrica', 'electric', 'phev', 'hev', 'ev'
 ]);
 
-const VERSION_MARKERS = new Set([
-  'xrx',
-  'xre',
-  'xlt',
-  'xle',
-  'xse',
-  'xrs',
-  'xr',
-  'xs',
-  'xl',
-  'xe',
-  'gli',
-  'gts',
-  'gt',
-  'gti',
-  'ltd',
-  'ltz',
-  'lt',
-  'le',
-  'se',
-  'ex',
-  'exl',
-  'lx',
-  'lxs',
-  'ls',
-  'touring'
-]);
-
-function normalizeVersionToken(token: string): string {
+function normalizeFipeToken(token: string): string {
   return token
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -178,39 +151,39 @@ function normalizeVersionToken(token: string): string {
     .toLowerCase();
 }
 
-function stripParentheses(value: string): string {
-  return value.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+function isFipeVersionStart(token: string, idx: number): boolean {
+  if (idx === 0) return false;
+  const n = normalizeFipeToken(token);
+  if (FIPE_TRIM_MARKERS.has(n)) return true;
+  if (/^\d+[.,]\d+$/.test(token)) return true;
+  if (/^\d+v$/i.test(token)) return true;
+  if (/^v\d+$/i.test(token)) return true;
+  if (/^\d+x\d+$/i.test(token)) return true;
+  if (/^\d+(?:cv|hp)$/i.test(token)) return true;
+  return false;
 }
 
-function collapseSpaces(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
-function suggestVersionFromModel(modelName: string | null): string | null {
-  if (!modelName) return null;
-  const cleaned = stripParentheses(modelName);
-  const tokens = cleaned.split(/\s+/).filter(Boolean);
-  const filtered = tokens.filter((token) => !VERSION_IGNORE_WORDS.has(normalizeVersionToken(token)));
-  const index = filtered.findIndex((token, idx) => idx > 0 && VERSION_MARKERS.has(normalizeVersionToken(token)));
-  if (index < 0) return null;
-  const suggestion = collapseSpaces(filtered.slice(index).join(' '));
-  return suggestion.length > 0 ? suggestion : null;
-}
-
-function buildVersionOptions(modelName: string | null): VersionOption[] {
-  const suggestion = suggestVersionFromModel(modelName);
-  if (!suggestion) return [];
-
-  const options = new Map<string, VersionOption>();
-  const normalizedSuggestion = collapseSpaces(suggestion);
-  options.set(normalizedSuggestion.toLowerCase(), { label: normalizedSuggestion, value: normalizedSuggestion });
-
-  const trimmed = normalizedSuggestion.replace(/\b\d+(?:[.,]\d+)?\b/g, '').trim();
-  if (trimmed.length > 0 && trimmed.toLowerCase() !== normalizedSuggestion.toLowerCase()) {
-    options.set(trimmed.toLowerCase(), { label: trimmed, value: trimmed });
+function splitFipeModelName(nome: string): { baseName: string; version: string | null } {
+  const tokens = nome.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  for (let i = 1; i < tokens.length; i++) {
+    if (isFipeVersionStart(tokens[i], i)) {
+      return { baseName: tokens.slice(0, i).join(' '), version: tokens.slice(i).join(' ') };
+    }
   }
+  return { baseName: nome, version: null };
+}
 
-  return Array.from(options.values());
+function groupFipeModelsByBase(fipeModels: FipeModel[]): ParsedModelGroup[] {
+  const groups = new Map<string, ParsedModelGroup>();
+  for (const fipeModel of fipeModels) {
+    const { baseName, version } = splitFipeModelName(fipeModel.nome);
+    const key = baseName.toUpperCase();
+    if (!groups.has(key)) {
+      groups.set(key, { baseName, variants: [] });
+    }
+    groups.get(key)!.variants.push({ code: fipeModel.codigo, label: fipeModel.nome, version });
+  }
+  return Array.from(groups.values());
 }
 
 export function Home() {
@@ -260,19 +233,16 @@ export function Home() {
     [brands, form.brandCode]
   );
 
-  const selectedModel = useMemo(
-    () => models.find((model) => model.codigo === form.modelCode) ?? null,
-    [models, form.modelCode]
+  const parsedGroups = useMemo(() => groupFipeModelsByBase(models), [models]);
+
+  const selectedGroup = useMemo(
+    () => parsedGroups.find((g) => g.baseName === form.baseModelName) ?? null,
+    [parsedGroups, form.baseModelName]
   );
 
-  const versionSuggestion = useMemo(
-    () => suggestVersionFromModel(selectedModel?.nome ?? null),
-    [selectedModel]
-  );
-
-  const versionOptions = useMemo(
-    () => buildVersionOptions(selectedModel?.nome ?? null),
-    [selectedModel]
+  const selectedVariant = useMemo(
+    () => selectedGroup?.variants.find((v) => v.code === form.variantCode) ?? null,
+    [selectedGroup, form.variantCode]
   );
 
   const selectedYearFrom = useMemo(
@@ -389,7 +359,7 @@ export function Home() {
   }, [form.brandCode]);
 
   useEffect(() => {
-    if (!form.brandCode || !form.modelCode) {
+    if (!form.brandCode || !form.variantCode) {
       setYears([]);
       return;
     }
@@ -398,7 +368,7 @@ export function Home() {
     setFipeError(null);
     setYearsLoading(true);
 
-    getFipeYears(form.brandCode, form.modelCode)
+    getFipeYears(form.brandCode, form.variantCode)
       .then((data) => {
         if (!active) return;
         const mapped = mapFipeYears(data).sort((a, b) => b.year - a.year);
@@ -415,7 +385,7 @@ export function Home() {
     return () => {
       active = false;
     };
-  }, [form.brandCode, form.modelCode]);
+  }, [form.brandCode, form.variantCode]);
 
   function parseOptionalInteger(value: string): number | null {
     const normalized = sanitizeNumberInput(value);
@@ -436,7 +406,7 @@ export function Home() {
     const resolvedVersion = form.version.trim();
     const version = resolvedVersion.length > 0 ? resolvedVersion : null;
 
-    if (!selectedBrand || !selectedModel) {
+    if (!selectedBrand || !form.baseModelName) {
       setError('Selecione marca e modelo.');
       setLoading(false);
       return;
@@ -457,7 +427,7 @@ export function Home() {
     try {
       await api.post('/cars/wanted', {
         brand: selectedBrand.nome,
-        model: selectedModel.nome,
+        model: form.baseModelName,
         version,
         condition: form.condition || null,
         yearFrom: selectedYearFrom?.year ?? null,
@@ -480,7 +450,8 @@ export function Home() {
     setForm((state) => ({
       ...state,
       brandCode,
-      modelCode: '',
+      baseModelName: '',
+      variantCode: '',
       version: '',
       condition: state.condition,
       yearFromCode: '',
@@ -490,12 +461,26 @@ export function Home() {
     setYears([]);
   }
 
-  function handleModelChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    const modelCode = event.target.value;
+  function handleGroupChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const baseModelName = event.target.value;
     setForm((state) => ({
       ...state,
-      modelCode,
+      baseModelName,
+      variantCode: '',
       version: '',
+      yearFromCode: '',
+      yearToCode: ''
+    }));
+    setYears([]);
+  }
+
+  function handleVariantChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const variantCode = event.target.value;
+    const variant = selectedGroup?.variants.find((v) => v.code === variantCode) ?? null;
+    setForm((state) => ({
+      ...state,
+      variantCode,
+      version: variant?.version ?? '',
       yearFromCode: '',
       yearToCode: ''
     }));
@@ -578,49 +563,26 @@ export function Home() {
 
           <div className="field">
             <label>Modelo *</label>
-            <select value={form.modelCode} onChange={handleModelChange} disabled={loading || modelsLoading || !form.brandCode}>
+            <select value={form.baseModelName} onChange={handleGroupChange} disabled={loading || modelsLoading || !form.brandCode}>
               <option value="">
                 {form.brandCode ? (modelsLoading ? 'Carregando modelos...' : 'Selecione o modelo') : 'Selecione a marca primeiro'}
               </option>
-              {models.map((model) => (
-                <option key={model.codigo} value={model.codigo}>{model.nome}</option>
+              {parsedGroups.map((group) => (
+                <option key={group.baseName} value={group.baseName}>{group.baseName}</option>
               ))}
             </select>
           </div>
 
           <div className="field">
-            <label>Versao (opcional)</label>
-            <input
-              list="version-options"
-              type="text"
-              value={form.version}
-              onChange={(e) => setForm((s) => ({ ...s, version: e.target.value }))}
-              disabled={loading || !form.modelCode}
-              placeholder={form.modelCode ? 'Ex: 1.5 16V Aut. (Hibrido)' : 'Selecione o modelo primeiro'}
-            />
-            <datalist id="version-options">
-              {versionOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+            <label>Versão (opcional)</label>
+            <select value={form.variantCode} onChange={handleVariantChange} disabled={loading || !form.baseModelName}>
+              <option value="">{form.baseModelName ? 'Qualquer versão' : 'Selecione o modelo primeiro'}</option>
+              {(selectedGroup?.variants ?? []).map((variant) => (
+                <option key={variant.code} value={variant.code}>
+                  {variant.version ?? variant.label}
+                </option>
               ))}
-              {versionSuggestion && !versionOptions.some((option) => option.value === versionSuggestion) && (
-                <option value={versionSuggestion}>{versionSuggestion}</option>
-              )}
-            </datalist>
-            <div className="muted" style={{ marginTop: 6 }}>
-              O parser salva a versao informada; quando houver sugestao detectada, ela aparece na lista.
-            </div>
-            {form.version && (
-              <div style={{ marginTop: 6 }}>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={loading}
-                  onClick={() => setForm((s) => ({ ...s, version: '' }))}
-                >
-                  Limpar
-                </button>
-              </div>
-            )}
+            </select>
           </div>
 
           <div className="field">
@@ -641,10 +603,10 @@ export function Home() {
             <select
               value={form.yearFromCode}
               onChange={(e) => setForm((s) => ({ ...s, yearFromCode: e.target.value }))}
-              disabled={loading || yearsLoading || !form.modelCode}
+              disabled={loading || yearsLoading || !form.variantCode}
             >
               <option value="">
-                {form.modelCode ? (yearsLoading ? 'Carregando anos...' : 'Opcional') : 'Selecione o modelo primeiro'}
+                {form.variantCode ? (yearsLoading ? 'Carregando anos...' : 'Opcional') : 'Selecione a versão primeiro'}
               </option>
               {years.map((year) => (
                 <option key={year.code} value={year.code}>{year.label}</option>
@@ -657,7 +619,7 @@ export function Home() {
             <select
               value={form.yearToCode}
               onChange={(e) => setForm((s) => ({ ...s, yearToCode: e.target.value }))}
-              disabled={loading || yearsLoading || !form.modelCode}
+              disabled={loading || yearsLoading || !form.variantCode}
             >
               <option value="">Opcional</option>
               {years.map((year) => (
