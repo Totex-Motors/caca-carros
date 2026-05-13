@@ -1,18 +1,7 @@
 import type { ExternalCar } from '../../../core/cars/interfaces/car';
-
-type SearchCarParams = {
-  brand: string;
-  model: string;
-  version: string | null;
-  condition: 'NEW' | 'USED' | null;
-  yearFrom: number;
-  yearTo: number | null;
-  maxPrice: number;
-  mileageFrom: number | null;
-  mileageTo: number | null;
-  city: string | null;
-  state: string | null;
-};
+import type { SearchCarParams } from '../../../core/cars/interfaces/search-car';
+import { normalizeVehicleVersion } from '../../../core/cars/utils/vehicle-model-parser';
+import { buildWebmotorsSearchUrl } from './webmotors-url-builder';
 
 type WebmotorsItem = Record<string, unknown> & {
   url?: unknown;
@@ -41,6 +30,29 @@ type WebmotorsItem = Record<string, unknown> & {
 
 const APIFY_ACTOR_ID = 'ribtools/webmotors-scraper';
 const MAX_REQUESTS = 10;
+const VERSION_FILTER_WORDS = new Set([
+  '(elétrico)',
+  '(hibrido)',
+  'turbo',
+  'flex',
+  'gasolina',
+  'diesel',
+  'etanol',
+  'hibrido',
+  'hibrida',
+  'hybrid',
+  'eletrico',
+  'eletrica',
+  'electric',
+  'phev',
+  'hev',
+  'ev',
+  'plugin',
+  'plug',
+  'aut',
+  'automatico',
+  'automatica'
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -94,6 +106,40 @@ function normalizeUrl(value: unknown): string | null {
   return normalized.startsWith('http') ? normalized : normalized;
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeComparableVersion(value: string | null): string {
+  if (!value) return '';
+
+  const normalized = normalizeVehicleVersion(value) ?? value;
+  return normalizeSearchText(normalized)
+    .split(' ')
+    .filter((token) => token.length > 0 && !VERSION_FILTER_WORDS.has(token.toLowerCase()))
+    .join(' ')
+    .trim();
+}
+
+function extractVersionTokens(version: string | null): string[] {
+  const normalized = normalizeComparableVersion(version);
+  if (!normalized) return [];
+
+  return normalized.split(' ').filter(Boolean);
+}
+
+function matchesVersion(title: string, versionTokens: string[]): boolean {
+  if (versionTokens.length === 0) return true;
+  const normalizedTitle = ` ${normalizeComparableVersion(title)} `;
+  return versionTokens.every((token) => normalizedTitle.includes(` ${token} `));
+}
+
 function normalizePhotos(item: WebmotorsItem): string[] {
   const photos: string[] = [];
 
@@ -136,54 +182,6 @@ function normalizeLocation(item: WebmotorsItem): { city: string | null; state: s
   const state = readString(item.state) ?? readString(location?.state) ?? readString(seller?.state);
 
   return { city, state };
-}
-
-function slugify(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase();
-}
-
-function buildWebmotorsSearchUrl(params: SearchCarParams): string {
-  const condition = params.condition ?? null;
-  const locationCity = 'São Paulo';
-
-  const basePath = condition === 'NEW'
-    ? ['carros-novos', 'sp']
-    : condition === 'USED'
-      ? ['carros-usados', 'sp']
-      : ['carros', 'sp'];
-
-  const url = new URL(`https://www.webmotors.com.br/${basePath.join('/')}`);
-
-  const brand = params.brand.trim();
-  const model = params.model.trim();
-  const autocompleteTerm = [brand, model].filter(Boolean).join(' ');
-
-  url.searchParams.set('lkid', condition === 'NEW' ? '1001' : condition === 'USED' ? '1000' : '1705');
-  url.searchParams.set('tipoveiculo', condition === 'NEW' ? 'carros-novos' : condition === 'USED' ? 'carros-usados' : 'carros');
-  url.searchParams.set('estadocidade', locationCity);
-
-  if (autocompleteTerm) {
-    url.searchParams.set('autocompleteTerm', autocompleteTerm);
-    url.searchParams.set('autocomplete', model || brand);
-  }
-
-  if (brand) url.searchParams.set('marca1', brand);
-  if (model) url.searchParams.set('modelo1', model);
-
-  const yearTo = params.yearTo ?? params.yearFrom;
-  if (params.yearFrom) url.searchParams.set('anode', String(params.yearFrom));
-  if (yearTo) url.searchParams.set('anoate', String(yearTo));
-
-  if (Number.isFinite(params.maxPrice) && params.maxPrice > 0) {
-    url.searchParams.set('precoate', String(Math.trunc(params.maxPrice)));
-  }
-
-  return url.toString();
 }
 
 function buildActorInput(params: SearchCarParams) {
@@ -264,7 +262,7 @@ function ensureActorId(): string {
   return APIFY_ACTOR_ID;
 }
 
-export class ApifyProvider {
+export class WebmotorsProvider {
   async search(params: SearchCarParams): Promise<ExternalCar[]> {
     const token = process.env.APIFY_TOKEN;
     if (!token) throw new Error('APIFY_TOKEN is required');
@@ -273,7 +271,7 @@ export class ApifyProvider {
     const timeoutMs = Number(process.env.APIFY_TIMEOUT_MS ?? 40000);
     const url = `https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
 
-    console.info('[apify.provider] requesting webmotors search', {
+    console.info('[webmotors.provider] requesting webmotors search', {
       brand: params.brand,
       model: params.model,
       yearFrom: params.yearFrom,
@@ -302,17 +300,19 @@ export class ApifyProvider {
 
     const output: ExternalCar[] = [];
     const seen = new Set<string>();
+    const versionTokens = extractVersionTokens(params.version ?? null);
 
     for (const item of items as WebmotorsItem[]) {
       const normalized = normalizeItem(item, params);
       if (!normalized) continue;
+      if (!matchesVersion(normalized.title, versionTokens)) continue;
       if (seen.has(normalized.url)) continue;
       seen.add(normalized.url);
       output.push(normalized);
       if (output.length >= MAX_REQUESTS) break;
     }
 
-    console.info('[apify.provider] normalized results', {
+    console.info('[webmotors.provider] normalized results', {
       count: output.length
     });
 

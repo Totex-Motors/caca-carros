@@ -3,6 +3,7 @@ import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prism
 import { prisma } from '../../../infra/database/prisma/client';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
 import { SearchCarService } from '../../../core/cars/services/search-car.service';
+import { parseVehicleModelAndVersion } from '../../../core/cars/utils/vehicle-model-parser';
 
 type CarDTO = {
   title: string;
@@ -21,6 +22,7 @@ type WantedCarDTO = {
   id: string;
   brand: string;
   model: string;
+  version: string | null;
   condition: WantedCarCondition | null;
   yearFrom: number;
   yearTo: number | null;
@@ -65,6 +67,7 @@ function mapWantedToDto(wanted: WantedCar & { cars?: Car[] }): WantedCarDTO {
     id: wanted.id,
     brand: wanted.brand,
     model: wanted.model,
+    version: wanted.version ?? null,
     condition: wanted.condition ?? null,
     yearFrom: wanted.yearFrom,
     yearTo: wanted.yearTo,
@@ -88,9 +91,10 @@ export class SearchCarController {
   constructor(private readonly searchService = new SearchCarService()) {}
 
   async createWanted(req: Request, res: Response): Promise<Response> {
-    const { brand, model, condition, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo } = req.body as {
+    const { brand, model, version, condition, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo } = req.body as {
       brand?: unknown;
       model?: unknown;
+      version?: unknown;
       condition?: unknown;
       year?: unknown;
       yearFrom?: unknown;
@@ -102,6 +106,14 @@ export class SearchCarController {
 
     if (typeof brand !== 'string' || typeof model !== 'string') {
       return res.status(400).json({ message: 'brand and model are required' });
+    }
+
+    const parsedModel = await parseVehicleModelAndVersion(brand, [model, typeof version === 'string' ? version : ''].filter(Boolean).join(' '));
+    const resolvedModel = parsedModel.model.trim();
+    const resolvedVersion = parsedModel.version;
+
+    if (!resolvedModel) {
+      return res.status(400).json({ message: 'model is invalid' });
     }
 
     const resolvedYearFromRaw = yearFrom ?? year ?? null;
@@ -162,7 +174,8 @@ export class SearchCarController {
     const wanted = await prisma.wantedCar.create({
       data: {
         brand: brand.trim(),
-        model: model.trim(),
+        model: resolvedModel,
+        version: resolvedVersion,
         condition: resolvedCondition as WantedCarCondition | null,
         yearFrom: resolvedYearFrom as number,
         yearTo: resolvedYearTo as number,
@@ -206,6 +219,8 @@ export class SearchCarController {
       const results = await this.searchService.execute({
         brand: wanted.brand,
         model: wanted.model,
+        version: wanted.version ?? null,
+        condition: wanted.condition,
         yearFrom: wanted.yearFrom,
         yearTo: wanted.yearTo,
         maxPrice: wanted.maxPrice,

@@ -1,5 +1,10 @@
-import type { WantedCar } from '@prisma/client';
 import type { ExternalCar } from '../interfaces/car';
+
+type WantedCarLike = {
+  id: string;
+  brand: string;
+  model: string;
+};
 
 function normalizePhotos(photos: string[]): string[] {
   const output: string[] = [];
@@ -16,7 +21,7 @@ function normalizePhotos(photos: string[]): string[] {
   return output;
 }
 
-export function mapExternalCarToCreateInput(external: ExternalCar, wanted: WantedCar) {
+export function mapExternalCarToCreateInput(external: ExternalCar, wanted: WantedCarLike) {
   const photos = normalizePhotos(external.photos);
   const title = external.title.trim().length > 0 ? external.title : `${wanted.brand} ${wanted.model}`.trim();
 
