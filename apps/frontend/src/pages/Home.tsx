@@ -170,7 +170,7 @@ function splitFipeModelName(nome: string): { baseName: string; version: string |
       return { baseName: tokens.slice(0, i).join(' '), version: tokens.slice(i).join(' ') };
     }
   }
-  return { baseName: nome, version: null };
+  return { baseName: tokens.join(' '), version: null };
 }
 
 function groupFipeModelsByBase(fipeModels: FipeModel[]): ParsedModelGroup[] {
