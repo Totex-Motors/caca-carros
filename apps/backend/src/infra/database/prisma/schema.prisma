@@ -32,6 +32,7 @@ model WantedCar {
   id        String          @id @default(uuid())
   brand     String
   model     String
+  version   String?         @map("version")
   condition WantedCarCondition? @map("condition")
   yearFrom  Int             @map("year")
   yearTo    Int?            @map("year_to")

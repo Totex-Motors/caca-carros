@@ -35,6 +35,17 @@ function formatMaxPrice(value: number): string {
   return `R$ ${value.toLocaleString('pt-BR')}`;
 }
 
+function formatCondition(condition: WantedCarDTO['condition']): string {
+  switch (condition) {
+    case 'NEW':
+      return 'Novo';
+    case 'USED':
+      return 'Usado';
+    default:
+      return 'Qualquer';
+  }
+}
+
 function formatStatus(status: WantedCarDTO['status']): string {
   switch (status) {
     case 'PENDING':
@@ -101,6 +112,8 @@ export function WantedCarDetailsModal({
         <div className="modal-grid">
           <div className="modal-panel">
             <div className="modal-section-title">Detalhes cadastrados</div>
+            <div className="detail-row"><span>Condição</span><strong>{formatCondition(wantedCar.condition)}</strong></div>
+            <div className="detail-row"><span>Versao</span><strong>{wantedCar.version ?? '—'}</strong></div>
             <div className="detail-row"><span>Ano</span><strong>{formatRange(wantedCar.yearFrom, wantedCar.yearTo)}</strong></div>
             <div className="detail-row"><span>KM</span><strong>{formatRange(wantedCar.mileageFrom, wantedCar.mileageTo, ' km')}</strong></div>
             <div className="detail-row"><span>Preço máximo</span><strong>{formatMaxPrice(wantedCar.maxPrice)}</strong></div>

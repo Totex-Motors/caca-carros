@@ -1,6 +1,7 @@
 export type SearchCarParams = {
   brand: string;
   model: string;
+  version: string | null;
   condition: 'NEW' | 'USED' | null;
   yearFrom: number;
   yearTo: number | null;

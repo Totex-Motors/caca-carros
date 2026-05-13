@@ -4,6 +4,7 @@ export type WantedCarEntity = {
   id: string;
   brand: string;
   model: string;
+  version: string | null;
   yearFrom: number;
   yearTo: number | null;
   mileageFrom: number | null;

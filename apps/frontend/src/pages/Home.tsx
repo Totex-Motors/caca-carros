@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CarDTO, WantedCarDTO, WantedCarStatus } from '@caca/shared/types/car';
+import type { CarDTO, WantedCarCondition, WantedCarDTO, WantedCarStatus } from '@caca/shared/types/car';
 import { api } from '../services/api';
 import { WantedCarDetailsModal } from '../components/WantedCarDetailsModal';
 import { getFipeBrands, getFipeModels, getFipeYears, type FipeBrand, type FipeModel, type FipeYear } from '../services/fipe';
 
+type WantedCarView = WantedCarDTO & { version: string | null };
+
 type CreateWantedInput = {
   brandCode: string;
   modelCode: string;
+  version: string;
+  condition: WantedCarCondition | '';
   yearFromCode: string;
   yearToCode: string;
   mileageFrom: string;
@@ -36,12 +40,19 @@ type ManualSearchResponse = {
   message: string;
 };
 
+type VersionOption = {
+  label: string;
+  value: string;
+};
+
 const MAX_PRICE_FALLBACK = 2147483647;
 
 function createEmptyForm(): CreateWantedInput {
   return {
     brandCode: '',
     modelCode: '',
+    version: '',
+    condition: '',
     yearFromCode: '',
     yearToCode: '',
     mileageFrom: '',
@@ -102,6 +113,106 @@ function formatStatus(status: WantedCarStatus): string {
   }
 }
 
+function formatCondition(condition: WantedCarCondition | null): string {
+  switch (condition) {
+    case 'NEW':
+      return 'Novo';
+    case 'USED':
+      return 'Usado';
+    default:
+      return 'Qualquer';
+  }
+}
+
+const VERSION_IGNORE_WORDS = new Set([
+  'turbo',
+  'flex',
+  'gasolina',
+  'diesel',
+  'hibrido',
+  'hibrida',
+  'hybrid',
+  'eletrico',
+  'eletrica',
+  'electric',
+  'phev',
+  'hev',
+  'ev',
+  'plugin',
+  'plug'
+]);
+
+const VERSION_MARKERS = new Set([
+  'xrx',
+  'xre',
+  'xlt',
+  'xle',
+  'xse',
+  'xrs',
+  'xr',
+  'xs',
+  'xl',
+  'xe',
+  'gli',
+  'gts',
+  'gt',
+  'gti',
+  'ltd',
+  'ltz',
+  'lt',
+  'le',
+  'se',
+  'ex',
+  'exl',
+  'lx',
+  'lxs',
+  'ls',
+  'touring'
+]);
+
+function normalizeVersionToken(token: string): string {
+  return token
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase();
+}
+
+function stripParentheses(value: string): string {
+  return value.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+}
+
+function collapseSpaces(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function suggestVersionFromModel(modelName: string | null): string | null {
+  if (!modelName) return null;
+  const cleaned = stripParentheses(modelName);
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  const filtered = tokens.filter((token) => !VERSION_IGNORE_WORDS.has(normalizeVersionToken(token)));
+  const index = filtered.findIndex((token, idx) => idx > 0 && VERSION_MARKERS.has(normalizeVersionToken(token)));
+  if (index < 0) return null;
+  const suggestion = collapseSpaces(filtered.slice(index).join(' '));
+  return suggestion.length > 0 ? suggestion : null;
+}
+
+function buildVersionOptions(modelName: string | null): VersionOption[] {
+  const suggestion = suggestVersionFromModel(modelName);
+  if (!suggestion) return [];
+
+  const options = new Map<string, VersionOption>();
+  const normalizedSuggestion = collapseSpaces(suggestion);
+  options.set(normalizedSuggestion.toLowerCase(), { label: normalizedSuggestion, value: normalizedSuggestion });
+
+  const trimmed = normalizedSuggestion.replace(/\b\d+(?:[.,]\d+)?\b/g, '').trim();
+  if (trimmed.length > 0 && trimmed.toLowerCase() !== normalizedSuggestion.toLowerCase()) {
+    options.set(trimmed.toLowerCase(), { label: trimmed, value: trimmed });
+  }
+
+  return Array.from(options.values());
+}
+
 export function Home() {
   const navigate = useNavigate();
   const [wantedCars, setWantedCars] = useState<WantedCarDTO[]>([]);
@@ -152,6 +263,16 @@ export function Home() {
   const selectedModel = useMemo(
     () => models.find((model) => model.codigo === form.modelCode) ?? null,
     [models, form.modelCode]
+  );
+
+  const versionSuggestion = useMemo(
+    () => suggestVersionFromModel(selectedModel?.nome ?? null),
+    [selectedModel]
+  );
+
+  const versionOptions = useMemo(
+    () => buildVersionOptions(selectedModel?.nome ?? null),
+    [selectedModel]
   );
 
   const selectedYearFrom = useMemo(
@@ -312,6 +433,8 @@ export function Home() {
     const resolvedMaxPrice = maxPrice !== null && maxPrice > 0 ? maxPrice : null;
     const mileageFrom = parseOptionalInteger(form.mileageFrom);
     const mileageTo = parseOptionalInteger(form.mileageTo);
+    const resolvedVersion = form.version.trim();
+    const version = resolvedVersion.length > 0 ? resolvedVersion : null;
 
     if (!selectedBrand || !selectedModel) {
       setError('Selecione marca e modelo.');
@@ -335,6 +458,8 @@ export function Home() {
       await api.post('/cars/wanted', {
         brand: selectedBrand.nome,
         model: selectedModel.nome,
+        version,
+        condition: form.condition || null,
         yearFrom: selectedYearFrom?.year ?? null,
         yearTo: selectedYearTo?.year ?? null,
         mileageFrom: mileageFrom ?? null,
@@ -356,6 +481,8 @@ export function Home() {
       ...state,
       brandCode,
       modelCode: '',
+      version: '',
+      condition: state.condition,
       yearFromCode: '',
       yearToCode: ''
     }));
@@ -368,6 +495,7 @@ export function Home() {
     setForm((state) => ({
       ...state,
       modelCode,
+      version: '',
       yearFromCode: '',
       yearToCode: ''
     }));
@@ -435,7 +563,7 @@ export function Home() {
 
       <form className="card" onSubmit={createWanted}>
         <h2 style={{ marginTop: 0 }}>Cadastrar carro desejado</h2>
-        <div className="muted" style={{ marginBottom: 12 }}>Campos obrigatorios: Marca e Modelo.</div>
+        <div className="muted" style={{ marginBottom: 12 }}>Campos obrigatorios: Marca e Modelo. Novo/Usado e os demais filtros sao opcionais.</div>
 
         <div className="row">
           <div className="field">
@@ -457,6 +585,54 @@ export function Home() {
               {models.map((model) => (
                 <option key={model.codigo} value={model.codigo}>{model.nome}</option>
               ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label>Versao (opcional)</label>
+            <input
+              list="version-options"
+              type="text"
+              value={form.version}
+              onChange={(e) => setForm((s) => ({ ...s, version: e.target.value }))}
+              disabled={loading || !form.modelCode}
+              placeholder={form.modelCode ? 'Ex: 1.5 16V Aut. (Hibrido)' : 'Selecione o modelo primeiro'}
+            />
+            <datalist id="version-options">
+              {versionOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+              {versionSuggestion && !versionOptions.some((option) => option.value === versionSuggestion) && (
+                <option value={versionSuggestion}>{versionSuggestion}</option>
+              )}
+            </datalist>
+            <div className="muted" style={{ marginTop: 6 }}>
+              O parser salva a versao informada; quando houver sugestao detectada, ela aparece na lista.
+            </div>
+            {form.version && (
+              <div style={{ marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={loading}
+                  onClick={() => setForm((s) => ({ ...s, version: '' }))}
+                >
+                  Limpar
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <label>Condição (opcional)</label>
+            <select
+              value={form.condition}
+              onChange={(e) => setForm((s) => ({ ...s, condition: e.target.value as WantedCarCondition | '' }))}
+              disabled={loading}
+            >
+              <option value="">Qualquer</option>
+              <option value="NEW">Novo</option>
+              <option value="USED">Usado</option>
             </select>
           </div>
 
@@ -549,8 +725,9 @@ export function Home() {
               <div>
                 <div style={{ fontWeight: 800 }}>{w.brand} {w.model}</div>
                 <div className="muted">
-                  Ano: {w.yearFrom} a {w.yearTo ?? '—'} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
+                  Condição: {formatCondition(w.condition)} • Ano: {w.yearFrom} a {w.yearTo ?? '—'} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
                 </div>
+                {w.version && <div className="muted">Versao: {w.version}</div>}
                 <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -579,8 +756,9 @@ export function Home() {
               <div>
                 <div style={{ fontWeight: 800 }}>{w.brand} {w.model}</div>
                 <div className="muted">
-                  Ano: {w.yearFrom} a {w.yearTo ?? '—'} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
+                  Condição: {formatCondition(w.condition)} • Ano: {w.yearFrom} a {w.yearTo ?? '—'} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
                 </div>
+                {w.version && <div className="muted">Versao: {w.version}</div>}
                 <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start' }}>

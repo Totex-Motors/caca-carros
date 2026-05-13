@@ -26,12 +26,28 @@ export function startCarSearchJob() {
     expression,
     async () => {
       try {
-        const pending = await prisma.wantedCar.findMany({ where: { status: 'PENDING' } });
+        const pending = await prisma.wantedCar.findMany({
+          where: { status: 'PENDING' },
+          select: {
+            id: true,
+            brand: true,
+            model: true,
+            version: true,
+            condition: true,
+            yearFrom: true,
+            yearTo: true,
+            mileageFrom: true,
+            mileageTo: true,
+            maxPrice: true
+          }
+        });
 
         for (const wanted of pending) {
           const results = await service.execute({
             brand: wanted.brand,
             model: wanted.model,
+            version: wanted.version ?? null,
+            condition: (wanted as { condition: 'NEW' | 'USED' | null }).condition,
             yearFrom: wanted.yearFrom,
             yearTo: wanted.yearTo,
             mileageFrom: wanted.mileageFrom,
