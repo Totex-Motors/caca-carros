@@ -23,6 +23,9 @@ type WantedCarDTO = {
   brand: string;
   model: string;
   version: string | null;
+  clientName?: string | null;
+  clientPhone?: string | null;
+  seller?: string | null;
   condition: WantedCarCondition | null;
   yearFrom: number;
   yearTo: number | null;
@@ -68,6 +71,9 @@ function mapWantedToDto(wanted: WantedCar & { cars?: Car[] }): WantedCarDTO {
     brand: wanted.brand,
     model: wanted.model,
     version: wanted.version ?? null,
+    clientName: (wanted as any).clientName ?? null,
+    clientPhone: (wanted as any).clientPhone ?? null,
+    seller: (wanted as any).seller ?? null,
     condition: wanted.condition ?? null,
     yearFrom: wanted.yearFrom,
     yearTo: wanted.yearTo,
@@ -91,7 +97,7 @@ export class SearchCarController {
   constructor(private readonly searchService = new SearchCarService()) {}
 
   async createWanted(req: Request, res: Response): Promise<Response> {
-    const { brand, model, version, condition, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo } = req.body as {
+    const { brand, model, version, condition, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo, clientName, clientPhone, seller } = req.body as {
       brand?: unknown;
       model?: unknown;
       version?: unknown;
@@ -102,6 +108,9 @@ export class SearchCarController {
       maxPrice?: unknown;
       mileageFrom?: unknown;
       mileageTo?: unknown;
+      clientName?: unknown;
+      clientPhone?: unknown;
+      seller?: unknown;
     };
 
     if (typeof brand !== 'string' || typeof model !== 'string') {
@@ -176,6 +185,9 @@ export class SearchCarController {
         brand: brand.trim(),
         model: resolvedModel,
         version: resolvedVersion,
+        clientName: typeof clientName === 'string' && clientName.trim() !== '' ? clientName.trim() : null,
+        clientPhone: typeof clientPhone === 'string' && clientPhone.trim() !== '' ? clientPhone.trim() : null,
+        seller: typeof seller === 'string' && seller.trim() !== '' ? seller.trim() : null,
         condition: resolvedCondition as WantedCarCondition | null,
         yearFrom: resolvedYearFrom as number,
         yearTo: resolvedYearTo as number,
@@ -196,6 +208,28 @@ export class SearchCarController {
     }
 
     return res.status(201).json(mapWantedToDto(wantedWithCars));
+  }
+
+  async updateWanted(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params as { id?: string };
+    const { clientName, clientPhone, seller } = req.body as { clientName?: unknown; clientPhone?: unknown; seller?: unknown };
+
+    if (!id) return res.status(400).json({ message: 'id is required' });
+
+    const wanted = await prisma.wantedCar.findUnique({ where: { id }, include: { cars: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } } } });
+    if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
+
+    const updated = await prisma.wantedCar.update({
+      where: { id },
+      data: {
+        clientName: typeof clientName === 'string' && clientName.trim() !== '' ? clientName.trim() : null,
+        clientPhone: typeof clientPhone === 'string' && clientPhone.trim() !== '' ? clientPhone.trim() : null,
+        seller: typeof seller === 'string' && seller.trim() !== '' ? seller.trim() : null
+      },
+      include: { cars: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } } }
+    });
+
+    return res.json(mapWantedToDto(updated));
   }
 
   async manualSearch(req: Request, res: Response): Promise<Response> {
