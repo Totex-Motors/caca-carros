@@ -10,6 +10,7 @@ const controller = new SearchCarController();
 carsRoutes.use(authMiddleware);
 
 carsRoutes.post('/wanted', asyncHandler((req, res) => controller.createWanted(req, res)));
+carsRoutes.patch('/wanted/:id', asyncHandler((req, res) => controller.updateWanted(req, res)));
 carsRoutes.post('/search-external', asyncHandler((req, res) => controller.manualSearch(req, res)));
 carsRoutes.patch('/wanted/:id/status', asyncHandler((req, res) => controller.updateWantedStatus(req, res)));
 carsRoutes.get('/wanted', asyncHandler((req, res) => controller.listWanted(req, res)));

@@ -33,6 +33,9 @@ model WantedCar {
   brand     String
   model     String
   version   String?         @map("version")
+  clientName String?       @map("client_name")
+  clientPhone String?      @map("client_phone")
+  seller     String?       
   condition WantedCarCondition? @map("condition")
   yearFrom  Int             @map("year")
   yearTo    Int?            @map("year_to")

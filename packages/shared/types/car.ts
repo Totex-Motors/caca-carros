@@ -8,6 +8,9 @@ export type WantedCarDTO = {
   brand: string;
   model: string;
   version: string | null;
+  clientName?: string | null;
+  clientPhone?: string | null;
+  seller?: string | null;
   condition: WantedCarCondition | null;
   yearFrom: number;
   yearTo: number | null;

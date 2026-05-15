@@ -5,6 +5,9 @@ export type WantedCarEntity = {
   brand: string;
   model: string;
   version: string | null;
+  clientName?: string | null;
+  clientPhone?: string | null;
+  seller?: string | null;
   yearFrom: number;
   yearTo: number | null;
   mileageFrom: number | null;

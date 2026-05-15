@@ -18,6 +18,9 @@ type CreateWantedInput = {
   mileageFrom: string;
   mileageTo: string;
   maxPrice: string;
+  clientName: string;
+  clientPhone: string;
+  seller: string;
 };
 
 type FipeYearOption = {
@@ -66,6 +69,9 @@ function createEmptyForm(): CreateWantedInput {
     mileageFrom: '',
     mileageTo: '',
     maxPrice: ''
+    ,clientName: '',
+    clientPhone: '',
+    seller: ''
   };
 }
 
@@ -130,6 +136,18 @@ function formatCondition(condition: WantedCarCondition | null): string {
     default:
       return 'Qualquer';
   }
+}
+
+function formatPhone(raw?: string | null): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
+  }
+  return raw;
 }
 
 const FIPE_TRIM_MARKERS = new Set([
@@ -202,6 +220,8 @@ export function Home() {
   const [carsError, setCarsError] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [clientSavingId, setClientSavingId] = useState<string | null>(null);
+  const [clientSaveError, setClientSaveError] = useState<string | null>(null);
   const [brands, setBrands] = useState<FipeBrand[]>([]);
   const [models, setModels] = useState<FipeModel[]>([]);
   const [years, setYears] = useState<FipeYearOption[]>([]);
@@ -424,6 +444,9 @@ export function Home() {
         brand: selectedBrand.nome,
         model: form.baseModelName,
         version,
+        clientName: form.clientName?.trim() || null,
+        clientPhone: form.clientPhone?.trim() || null,
+        seller: form.seller?.trim() || null,
         condition: form.condition || null,
         yearFrom: selectedYearFrom?.year ?? null,
         yearTo: selectedYearTo?.year ?? null,
@@ -534,6 +557,20 @@ export function Home() {
       setStatusError('Falha ao atualizar status do carro.');
     } finally {
       setStatusUpdatingId(null);
+    }
+  }
+
+  async function updateWantedDetails(wantedCarId: string, patch: { clientName?: string | null; clientPhone?: string | null; seller?: string | null }): Promise<void> {
+    setClientSaveError(null);
+    setClientSavingId(wantedCarId);
+    try {
+      await api.patch(`/cars/wanted/${wantedCarId}`, patch);
+      await loadWanted();
+      await loadCarsPage(wantedCarId, 1);
+    } catch {
+      setClientSaveError('Falha ao salvar dados do cliente.');
+    } finally {
+      setClientSavingId(null);
     }
   }
 
@@ -655,6 +692,36 @@ export function Home() {
               inputMode="numeric"
             />
           </div>
+          <div className="field">
+            <label>Cliente (opcional)</label>
+            <input
+              type="text"
+              value={form.clientName}
+              onChange={(e) => setForm((s) => ({ ...s, clientName: e.target.value }))}
+              placeholder="Nome do cliente"
+            />
+          </div>
+
+          <div className="field">
+            <label>Telefone/WhatsApp (opcional)</label>
+            <input
+              type="text"
+              value={form.clientPhone}
+              onChange={(e) => setForm((s) => ({ ...s, clientPhone: sanitizeNumberInput(e.target.value) }))}
+              placeholder="11999999999"
+              inputMode="numeric"
+            />
+          </div>
+
+          <div className="field">
+            <label>Vendedor (opcional)</label>
+            <input
+              type="text"
+              value={form.seller}
+              onChange={(e) => setForm((s) => ({ ...s, seller: e.target.value }))}
+              placeholder="Nome do vendedor"
+            />
+          </div>
         </div>
 
         <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -686,6 +753,9 @@ export function Home() {
                 </div>
                 {w.version && <div className="muted">Versao: {w.version}</div>}
                 <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
+                {w.clientName && <div style={{ marginTop: 6 }}><strong>Cliente:</strong> {w.clientName}</div>}
+                {w.clientPhone && <div className="muted">{formatPhone(w.clientPhone)}</div>}
+                {w.seller && <div className="muted">Vendedor: {w.seller}</div>}
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                 <button className="secondary" disabled={loading} onClick={() => openWantedDetails(w.id)}>
@@ -717,6 +787,9 @@ export function Home() {
                 </div>
                 {w.version && <div className="muted">Versao: {w.version}</div>}
                 <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
+                {w.clientName && <div style={{ marginTop: 6 }}><strong>Cliente:</strong> {w.clientName}</div>}
+                {w.clientPhone && <div className="muted">{formatPhone(w.clientPhone)}</div>}
+                {w.seller && <div className="muted">Vendedor: {w.seller}</div>}
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                 <button className="secondary" disabled={loading} onClick={() => openWantedDetails(w.id)}>
@@ -743,6 +816,9 @@ export function Home() {
           autoSearchNotice={autoSearchNotice}
           statusLoading={statusUpdatingId === selectedWantedCar.id}
           statusError={statusError}
+          clientSavingId={clientSavingId}
+          clientSaveError={clientSaveError}
+          onSaveClient={(patch) => updateWantedDetails(selectedWantedCar.id, patch)}
           onClose={closeWantedDetails}
           onAutoSearch={() => handleAutoSearch(selectedWantedCar.id)}
           onMarkBought={() => updateWantedStatus(selectedWantedCar.id, 'BOUGHT')}
