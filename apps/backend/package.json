@@ -23,7 +23,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "playwright": "^1.47.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -211,6 +211,8 @@ export function Home() {
   const [error, setError] = useState<string | null>(null);
   const [autoSearchNotice, setAutoSearchNotice] = useState<string | null>(null);
   const [autoSearchLoadingId, setAutoSearchLoadingId] = useState<string | null>(null);
+  const [autoSearchOlxNotice, setAutoSearchOlxNotice] = useState<string | null>(null);
+  const [autoSearchOlxLoadingId, setAutoSearchOlxLoadingId] = useState<string | null>(null);
   const [selectedWantedId, setSelectedWantedId] = useState<string | null>(null);
   const [carsPage, setCarsPage] = useState(1);
   const [carsPageSize] = useState(10);
@@ -508,6 +510,7 @@ export function Home() {
   function openWantedDetails(wantedCarId: string) {
     setSelectedWantedId(wantedCarId);
     setAutoSearchNotice(null);
+    setAutoSearchOlxNotice(null);
     setStatusError(null);
     setCarsPage(1);
     setCarsData([]);
@@ -518,6 +521,7 @@ export function Home() {
   function closeWantedDetails() {
     setSelectedWantedId(null);
     setAutoSearchNotice(null);
+    setAutoSearchOlxNotice(null);
     setStatusError(null);
     setCarsPage(1);
     setCarsData([]);
@@ -538,6 +542,22 @@ export function Home() {
       setAutoSearchNotice('Falha ao buscar anuncios na Webmotors.');
     } finally {
       setAutoSearchLoadingId(null);
+    }
+  }
+
+  async function handleAutoSearchOlx(wantedCarId: string) {
+    if (autoSearchOlxLoadingId === wantedCarId) return;
+    setAutoSearchOlxNotice(null);
+    setAutoSearchOlxLoadingId(wantedCarId);
+    try {
+      const { data } = await api.post<ManualSearchResponse>('/cars/search-olx', { wantedCarId });
+      setAutoSearchOlxNotice(data.message || 'Busca OLX concluida.');
+      await loadWanted();
+      await loadCarsPage(wantedCarId, 1);
+    } catch {
+      setAutoSearchOlxNotice('Falha ao buscar anuncios na OLX.');
+    } finally {
+      setAutoSearchOlxLoadingId(null);
     }
   }
 
@@ -814,6 +834,8 @@ export function Home() {
           carsError={carsError}
           autoSearchLoading={autoSearchLoadingId === selectedWantedCar.id}
           autoSearchNotice={autoSearchNotice}
+          autoSearchOlxLoading={autoSearchOlxLoadingId === selectedWantedCar.id}
+          autoSearchOlxNotice={autoSearchOlxNotice}
           statusLoading={statusUpdatingId === selectedWantedCar.id}
           statusError={statusError}
           clientSavingId={clientSavingId}
@@ -821,6 +843,7 @@ export function Home() {
           onSaveClient={(patch) => updateWantedDetails(selectedWantedCar.id, patch)}
           onClose={closeWantedDetails}
           onAutoSearch={() => handleAutoSearch(selectedWantedCar.id)}
+          onAutoSearchOlx={() => handleAutoSearchOlx(selectedWantedCar.id)}
           onMarkBought={() => updateWantedStatus(selectedWantedCar.id, 'BOUGHT')}
           onArchive={() => updateWantedStatus(selectedWantedCar.id, 'ARCHIVED')}
           onPageChange={handleCarsPageChange}

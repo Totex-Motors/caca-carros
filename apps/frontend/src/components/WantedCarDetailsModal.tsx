@@ -12,10 +12,13 @@ type WantedCarDetailsModalProps = {
   carsError: string | null;
   autoSearchLoading: boolean;
   autoSearchNotice: string | null;
+  autoSearchOlxLoading: boolean;
+  autoSearchOlxNotice: string | null;
   statusLoading: boolean;
   statusError: string | null;
   onClose: () => void;
   onAutoSearch: () => void;
+  onAutoSearchOlx: () => void;
   onMarkBought: () => void;
   onArchive: () => void;
   onPageChange: (page: number) => void;
@@ -74,10 +77,13 @@ export function WantedCarDetailsModal({
   carsError,
   autoSearchLoading,
   autoSearchNotice,
+  autoSearchOlxLoading,
+  autoSearchOlxNotice,
   statusLoading,
   statusError,
   onClose,
   onAutoSearch,
+  onAutoSearchOlx,
   onMarkBought,
   onArchive,
   onPageChange,
@@ -233,11 +239,18 @@ export function WantedCarDetailsModal({
               <>
                 <div>
                   <div className="modal-section-title">Ações</div>
-                  <button type="button" disabled={autoSearchLoading} onClick={onAutoSearch}>
-                    {autoSearchLoading ? 'Buscando...' : 'Buscar anuncios automaticamente'}
-                  </button>
-                  <div className="muted">A busca consome creditos da Apify e pode levar alguns segundos.</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" disabled={autoSearchLoading} onClick={onAutoSearch}>
+                      {autoSearchLoading ? 'Buscando...' : 'Buscar anuncios automaticamente'}
+                    </button>
+                    <button type="button" disabled={autoSearchOlxLoading} onClick={onAutoSearchOlx}>
+                      {autoSearchOlxLoading ? 'Buscando OLX...' : 'Buscar automaticamente (OLX)'}
+                    </button>
+                  </div>
+                  <div className="muted">A busca Webmotors consome creditos da Apify e pode levar alguns segundos.</div>
                   {autoSearchNotice && <div className="muted">{autoSearchNotice}</div>}
+                  <div className="muted">A busca OLX usa proxy residencial e pode levar alguns segundos.</div>
+                  {autoSearchOlxNotice && <div className="muted">{autoSearchOlxNotice}</div>}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button type="button" disabled={statusLoading} onClick={onMarkBought}>

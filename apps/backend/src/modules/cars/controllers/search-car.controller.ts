@@ -3,6 +3,7 @@ import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prism
 import { prisma } from '../../../infra/database/prisma/client';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
 import { SearchCarService } from '../../../core/cars/services/search-car.service';
+import { SearchOlxService } from '../../../core/cars/services/search-olx.service';
 import { parseVehicleModelAndVersion } from '../../../core/cars/utils/vehicle-model-parser';
 
 type CarDTO = {
@@ -94,7 +95,10 @@ function parseOptionalInt(value: unknown): number | null {
 }
 
 export class SearchCarController {
-  constructor(private readonly searchService = new SearchCarService()) {}
+  constructor(
+    private readonly searchService = new SearchCarService(),
+    private readonly searchOlxService = new SearchOlxService()
+  ) {}
 
   async createWanted(req: Request, res: Response): Promise<Response> {
     const { brand, model, version, condition, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo, clientName, clientPhone, seller } = req.body as {
@@ -303,6 +307,76 @@ export class SearchCarController {
     } catch (error) {
       console.error('[SearchCarController] manual search failed', error);
       return res.status(500).json({ message: 'Falha ao buscar anuncios externos.' });
+    }
+  }
+
+  async manualSearchOlx(req: Request, res: Response): Promise<Response> {
+    const { wantedCarId, city, state } = req.body as ManualSearchBody;
+
+    if (typeof wantedCarId !== 'string') {
+      return res.status(400).json({ message: 'wantedCarId is required' });
+    }
+
+    const wanted = await prisma.wantedCar.findUnique({ where: { id: wantedCarId } });
+    if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
+
+    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : null;
+    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
+
+    try {
+      const results = await this.searchOlxService.execute({
+        brand: wanted.brand,
+        model: wanted.model,
+        version: wanted.version ?? null,
+        condition: wanted.condition,
+        yearFrom: wanted.yearFrom,
+        yearTo: wanted.yearTo,
+        maxPrice: wanted.maxPrice,
+        mileageFrom: wanted.mileageFrom,
+        mileageTo: wanted.mileageTo,
+        city: resolvedCity,
+        state: resolvedState
+      });
+
+      if (results.length === 0) {
+        return res.json({
+          wantedCarId: wanted.id,
+          adsFound: 0,
+          carsSaved: 0,
+          message: 'Nenhum anuncio encontrado na OLX.'
+        });
+      }
+
+      const savedCount = await prisma.$transaction(async (tx) => {
+        const created = await tx.car.createMany({
+          data: results.map((car) => mapExternalCarToCreateInput(car, wanted)),
+          skipDuplicates: true
+        });
+
+        await tx.wantedCar.update({ where: { id: wanted.id }, data: { status: 'FOUND' } });
+
+        return created.count;
+      });
+
+      const message = savedCount > 0
+        ? `Busca OLX concluida. ${savedCount} anuncios salvos.`
+        : 'Busca OLX concluida, mas nenhum anuncio novo foi salvo.';
+
+      console.info('[SearchCarController] manual search olx done', {
+        wantedCarId: wanted.id,
+        adsFound: results.length,
+        carsSaved: savedCount
+      });
+
+      return res.json({
+        wantedCarId: wanted.id,
+        adsFound: results.length,
+        carsSaved: savedCount,
+        message
+      });
+    } catch (error) {
+      console.error('[SearchCarController] manual search olx failed', error);
+      return res.status(500).json({ message: 'Falha ao buscar anuncios na OLX.' });
     }
   }
 
