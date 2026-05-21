@@ -381,18 +381,6 @@ export class SearchCarController {
         }) };
 
       const results = searchResponse.results;
-        brand: wanted.brand,
-        model: wanted.model,
-        version: wanted.version ?? null,
-        condition: wanted.condition,
-        yearFrom: wanted.yearFrom,
-        yearTo: wanted.yearTo,
-        maxPrice: wanted.maxPrice,
-        mileageFrom: wanted.mileageFrom,
-        mileageTo: wanted.mileageTo,
-        city: resolvedCity,
-        state: resolvedState
-      });
 
       if (results.length === 0) {
         return res.json({

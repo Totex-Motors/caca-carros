@@ -24,10 +24,11 @@ const BLOCKED_URL_SNIPPETS = [
 ];
 
 const LIST_WAIT_SELECTORS = [
-  '[data-testid*="ad-list"]',
-  '[data-testid*="list"]',
-  'main',
-  'section'
+  '[data-testid*="ad"]',
+  '[data-testid*="listing"]',
+  '[data-testid*="item"]',
+  'a[href*="/autos-e-pecas/"]',
+  'a[href*="/carros-vans-e-utilitarios/"]'
 ];
 
 const DETAIL_WAIT_SELECTORS = [
@@ -441,6 +442,31 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
   return page.$$eval('a', (anchors: Element[]) => {
     const results: RawCard[] = [];
 
+    function isListingLink(anchor: Element, href: string): boolean {
+      const value = href.trim();
+      if (!value) return false;
+      const lower = value.toLowerCase();
+      if (lower.startsWith('#') || lower.startsWith('mailto:') || lower.startsWith('tel:')) return false;
+
+      const isOlxLink = lower.includes('olx.com.br') || lower.startsWith('/');
+      if (!isOlxLink) return false;
+
+      if (lower.includes('/item/') || lower.includes('/d/')) return true;
+      if (lower.includes('/autos-e-pecas/') || lower.includes('/carros-vans-e-utilitarios/')) return true;
+
+      const testId = anchor.getAttribute('data-testid') || '';
+      if (testId.toLowerCase().includes('ad')) return true;
+
+      const dataLurker = anchor.getAttribute('data-lurker-detail');
+      if (dataLurker) return true;
+
+      const parentTestId = anchor.closest('[data-testid]')?.getAttribute('data-testid') || '';
+      if (parentTestId.toLowerCase().includes('ad')) return true;
+
+      const hasNumericId = /\d{6,}/.test(lower);
+      return hasNumericId && lower.includes('olx.com.br');
+    }
+
     function findMetaText(values: string[], pattern: RegExp): string | null {
       return values.find((entry) => pattern.test(entry)) ?? null;
     }
@@ -457,7 +483,7 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
     for (const anchor of anchors) {
       const href = anchor.getAttribute('href') || '';
       if (!href) continue;
-      if (!href.includes('/item/') && !href.includes('/d/')) continue;
+      if (!isListingLink(anchor, href)) continue;
 
       const titleEl = anchor.querySelector('h2, h3, [data-testid*="title"], [data-testid*="ad-title"]');
       const priceEl = anchor.querySelector('[data-testid*="price"], [class*="price"]');
@@ -848,6 +874,12 @@ export class OlxScraper {
 
         if (debug) {
           debug.pages.push({ page: pageIndex, url, ldCount: ldJsonListings.length, cardCount: cardListings.length });
+          console.info('[olx.scraper] page stats', {
+            page: pageIndex,
+            url,
+            ldCount: ldJsonListings.length,
+            cardCount: cardListings.length
+          });
         }
 
         if (collected.length >= options.maxAds) break;
