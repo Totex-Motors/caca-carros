@@ -1,5 +1,5 @@
 import type { OlxSearchFilters } from './olx-types';
-import { buildOlxSearchQuery, normalizeSearchText, parseOlxVehicleParts } from './olx-model-parser';
+import { normalizeSearchText, parseOlxVehicleParts, slugify } from './olx-model-parser';
 
 const BASE_URL = 'https://www.olx.com.br/autos-e-pecas/carros-vans-e-utilitarios';
 const DEFAULT_STATE = 'sp';
@@ -38,15 +38,25 @@ function resolveConditionParam(condition: OlxSearchFilters['condition']): string
 
 export function buildOlxSearchUrl(filters: OlxSearchFilters, page: number): string {
   const state = normalizeState(filters.state);
-  const url = new URL(`${BASE_URL}/estado-${state}`);
   const parsed = parseOlxVehicleParts({
     brand: filters.brand,
     model: filters.model,
     version: filters.version
   });
+  const brandSlug = slugify(parsed.brand);
+  const modelSlug = slugify(parsed.model);
+  const pathSegments = [BASE_URL];
 
-  const query = normalizeSearchText(buildOlxSearchQuery(parsed));
-  if (query) url.searchParams.set(PARAM_KEYS.search, query);
+  if (brandSlug) pathSegments.push(brandSlug);
+  if (modelSlug) pathSegments.push(modelSlug);
+  pathSegments.push(`estado-${state}`);
+
+  const url = new URL(pathSegments.join('/'));
+
+  if (parsed.version) {
+    const query = normalizeSearchText(parsed.version);
+    if (query) url.searchParams.set(PARAM_KEYS.search, query);
+  }
 
   const priceMin = toPositiveInteger(filters.priceMin);
   const priceMax = toPositiveInteger(filters.priceMax);

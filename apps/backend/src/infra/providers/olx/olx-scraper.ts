@@ -1,7 +1,7 @@
 import type { Page, Request, Route } from 'playwright';
 import { OlxBrowserFactory } from './olx-browser-factory';
 import { buildOlxSearchUrl } from './olx-url-builder';
-import type { OlxCardData, OlxDetailData, OlxListing, OlxScrapeOptions, OlxSearchFilters } from './olx-types';
+import type { OlxCardData, OlxDetailData, OlxListing, OlxScrapeDebug, OlxScrapeOptions, OlxScrapeResult, OlxSearchFilters } from './olx-types';
 import { OpenClawFallback } from '../openclaw/openclaw-fallback';
 import { createOpenClawFallback } from '../openclaw/openclaw-factory';
 import type { OpenClawField, OpenClawHint } from '../openclaw/openclaw-types';
@@ -38,6 +38,11 @@ const DETAIL_WAIT_SELECTORS = [
 ];
 
 const DEFAULT_MAX_PAGES = 5;
+
+function isOlxDebugEnabled(): boolean {
+  const flag = process.env.OLX_DEBUG_ERRORS ?? 'false';
+  return flag.toLowerCase() === 'true';
+}
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -777,9 +782,12 @@ export class OlxScraper {
     private readonly openClawFallback = createOpenClawFallback()
   ) {}
 
-  async search(filters: OlxSearchFilters, options: OlxScrapeOptions): Promise<OlxListing[]> {
+  async search(filters: OlxSearchFilters, options: OlxScrapeOptions): Promise<OlxScrapeResult> {
     const rawMaxPages = Number.isFinite(options.maxPages) ? Math.trunc(options.maxPages) : 0;
     const maxPages = rawMaxPages > 0 ? rawMaxPages : DEFAULT_MAX_PAGES;
+    const debug: OlxScrapeDebug | null = isOlxDebugEnabled()
+      ? { pages: [], collected: 0, detailAttempts: 0, detailErrors: 0 }
+      : null;
 
     const { context } = await this.browserFactory.createContext(options.sessionId);
     const page = await context.newPage();
@@ -793,6 +801,7 @@ export class OlxScraper {
     try {
       for (let pageIndex = 1; pageIndex <= maxPages; pageIndex += 1) {
         const url = buildOlxSearchUrl(filters, pageIndex);
+        console.info('[olx.scraper] search page', { page: pageIndex, url });
         await randomDelay(page, 300, 800);
         await runWithRetries(
           () => page.goto(url, { waitUntil: 'domcontentloaded', timeout: Number.isFinite(NAV_TIMEOUT_MS) ? NAV_TIMEOUT_MS : 45000 }),
@@ -819,7 +828,12 @@ export class OlxScraper {
           if (collected.length >= options.maxAds) break;
         }
 
-        if (collected.length >= options.maxAds) break;
+        if (collected.length >= options.maxAds) {
+          if (debug) {
+            debug.pages.push({ page: pageIndex, url, ldCount: ldJsonListings.length, cardCount: 0 });
+          }
+          break;
+        }
 
         const cardListings = await extractListingsFromCards(page);
         pageListingsCount += cardListings.length;
@@ -832,12 +846,17 @@ export class OlxScraper {
           if (collected.length >= options.maxAds) break;
         }
 
+        if (debug) {
+          debug.pages.push({ page: pageIndex, url, ldCount: ldJsonListings.length, cardCount: cardListings.length });
+        }
+
         if (collected.length >= options.maxAds) break;
         if (pageListingsCount === 0) break;
       }
 
       const enriched: OlxListing[] = [];
       for (const listing of collected) {
+        if (debug) debug.detailAttempts += 1;
         let detail: Partial<OlxListing> | null = null;
         try {
           detail = await runWithRetries(
@@ -845,6 +864,7 @@ export class OlxScraper {
             Math.max(1, options.retryAttempts)
           );
         } catch {
+          if (debug) debug.detailErrors += 1;
           detail = null;
         }
 
@@ -854,7 +874,11 @@ export class OlxScraper {
         if (enriched.length >= options.maxAds) break;
       }
 
-      return enriched;
+      if (debug) {
+        debug.collected = enriched.length;
+      }
+
+      return { listings: enriched, debug: debug ?? undefined };
     } finally {
       await page.close().catch(() => undefined);
       await detailPage.close().catch(() => undefined);

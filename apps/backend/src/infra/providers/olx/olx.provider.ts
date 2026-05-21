@@ -2,7 +2,7 @@ import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import type { SearchCarParams } from '../../../core/cars/interfaces/search-car';
 import { buildVersionTokens, matchesVersion, parseOlxVehicleParts, slugify } from './olx-model-parser';
 import { OlxScraper } from './olx-scraper';
-import type { OlxListing, OlxSearchFilters } from './olx-types';
+import type { OlxListing, OlxScrapeDebug, OlxSearchFilters } from './olx-types';
 
 const MAX_PRICE_FALLBACK = 2147483647;
 
@@ -91,6 +91,11 @@ export class OlxProvider {
   constructor(private readonly scraper = new OlxScraper()) {}
 
   async search(params: SearchCarParams): Promise<ExternalCar[]> {
+    const { cars } = await this.searchWithDebug(params);
+    return cars;
+  }
+
+  async searchWithDebug(params: SearchCarParams): Promise<{ cars: ExternalCar[]; debug?: OlxScrapeDebug }> {
     const filters = normalizeFilters(params);
     const adsLimit = clampAdsLimit(Number(process.env.OLX_ADS_LIMIT ?? 10));
     const maxPagesEnv = Number(process.env.OLX_MAX_PAGES ?? 0);
@@ -105,7 +110,7 @@ export class OlxProvider {
       yearTo: filters.yearMax
     });
 
-    const listings = await this.scraper.search(filters, {
+    const { listings, debug } = await this.scraper.search(filters, {
       maxAds: adsLimit,
       maxPages,
       retryAttempts,
@@ -124,6 +129,6 @@ export class OlxProvider {
 
     console.info('[olx.provider] normalized results', { count: output.length });
 
-    return output;
+    return { cars: output, debug };
   }
 }

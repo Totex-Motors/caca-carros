@@ -19,6 +19,20 @@ export type OlxScrapeOptions = {
   sessionId?: string;
 };
 
+export type OlxScrapeDebugPage = {
+  page: number;
+  url: string;
+  ldCount: number;
+  cardCount: number;
+};
+
+export type OlxScrapeDebug = {
+  pages: OlxScrapeDebugPage[];
+  collected: number;
+  detailAttempts: number;
+  detailErrors: number;
+};
+
 export type OlxCardData = {
   url: string;
   title: string;
@@ -60,4 +74,9 @@ export type OlxListing = {
   city: string | null;
   state: string | null;
   photos: string[];
+};
+
+export type OlxScrapeResult = {
+  listings: OlxListing[];
+  debug?: OlxScrapeDebug;
 };

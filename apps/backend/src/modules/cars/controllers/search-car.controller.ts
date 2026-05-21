@@ -44,6 +44,33 @@ type ManualSearchBody = {
   state?: unknown;
 };
 
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/\/\/[^@\s]+@/g, '//***@')
+    .replace(/\b[^\s:@]+:[^\s@]+@/g, '***:***@')
+    .trim();
+}
+
+function toSafeErrorDetails(error: unknown): string | null {
+  if (!error) return null;
+  if (error instanceof Error) {
+    return sanitizeErrorMessage(error.message);
+  }
+  if (typeof error === 'string') {
+    return sanitizeErrorMessage(error);
+  }
+  try {
+    return sanitizeErrorMessage(JSON.stringify(error));
+  } catch {
+    return null;
+  }
+}
+
+function isOlxDebugEnabled(): boolean {
+  const flag = process.env.OLX_DEBUG_ERRORS ?? 'false';
+  return flag.toLowerCase() === 'true';
+}
+
 function mapCarToDto(car: Car): CarDTO {
   const rawPhotos = Array.isArray(car.photos) ? car.photos : [];
   const photos = rawPhotos.length > 0
@@ -324,7 +351,36 @@ export class SearchCarController {
     const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
 
     try {
-      const results = await this.searchOlxService.execute({
+      const debugEnabled = isOlxDebugEnabled();
+      const searchResponse = debugEnabled
+        ? await this.searchOlxService.executeWithDebug({
+          brand: wanted.brand,
+          model: wanted.model,
+          version: wanted.version ?? null,
+          condition: wanted.condition,
+          yearFrom: wanted.yearFrom,
+          yearTo: wanted.yearTo,
+          maxPrice: wanted.maxPrice,
+          mileageFrom: wanted.mileageFrom,
+          mileageTo: wanted.mileageTo,
+          city: resolvedCity,
+          state: resolvedState
+        })
+        : { results: await this.searchOlxService.execute({
+          brand: wanted.brand,
+          model: wanted.model,
+          version: wanted.version ?? null,
+          condition: wanted.condition,
+          yearFrom: wanted.yearFrom,
+          yearTo: wanted.yearTo,
+          maxPrice: wanted.maxPrice,
+          mileageFrom: wanted.mileageFrom,
+          mileageTo: wanted.mileageTo,
+          city: resolvedCity,
+          state: resolvedState
+        }) };
+
+      const results = searchResponse.results;
         brand: wanted.brand,
         model: wanted.model,
         version: wanted.version ?? null,
@@ -343,7 +399,8 @@ export class SearchCarController {
           wantedCarId: wanted.id,
           adsFound: 0,
           carsSaved: 0,
-          message: 'Nenhum anuncio encontrado na OLX.'
+          message: 'Nenhum anuncio encontrado na OLX.',
+          ...(debugEnabled && searchResponse.debug ? { debug: searchResponse.debug } : {})
         });
       }
 
@@ -372,11 +429,16 @@ export class SearchCarController {
         wantedCarId: wanted.id,
         adsFound: results.length,
         carsSaved: savedCount,
-        message
+        message,
+        ...(debugEnabled && searchResponse.debug ? { debug: searchResponse.debug } : {})
       });
     } catch (error) {
       console.error('[SearchCarController] manual search olx failed', error);
-      return res.status(500).json({ message: 'Falha ao buscar anuncios na OLX.' });
+      const details = isOlxDebugEnabled() ? toSafeErrorDetails(error) : null;
+      return res.status(500).json({
+        message: 'Falha ao buscar anuncios na OLX.',
+        ...(details ? { details } : {})
+      });
     }
   }
 

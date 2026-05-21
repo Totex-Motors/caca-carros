@@ -21,6 +21,8 @@ const VIEWPORTS = [
   { width: 1920, height: 1080 }
 ];
 
+const CHROMIUM_ARGS = ['--no-sandbox', '--disable-setuid-sandbox'];
+
 function pickRandom<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
@@ -66,6 +68,7 @@ export class OlxBrowserFactory {
 
     const browser = await chromium.launch({
       headless: true,
+      args: CHROMIUM_ARGS,
       proxy: {
         server: proxy.server,
         username: proxy.username,
