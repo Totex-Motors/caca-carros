@@ -45,38 +45,27 @@ function formatMaxPrice(value: number): string {
 
 function formatCondition(condition: WantedCarDTO['condition']): string {
   switch (condition) {
-    case 'NEW':
-      return 'Novo';
-    case 'USED':
-      return 'Usado';
-    default:
-      return 'Qualquer';
+    case 'NEW': return 'Novo';
+    case 'USED': return 'Usado';
+    default: return 'Qualquer';
   }
 }
 
 function formatSellerType(sellerType: WantedCarDTO['sellerType']): string {
   switch (sellerType) {
-    case 'PRIVATE':
-      return 'Particular';
-    case 'PROFESSIONAL':
-      return 'Loja / Concessionária';
-    default:
-      return 'Qualquer';
+    case 'PRIVATE': return 'Particular';
+    case 'PROFESSIONAL': return 'Loja / Concessionária';
+    default: return 'Qualquer';
   }
 }
 
 function formatStatus(status: WantedCarDTO['status']): string {
   switch (status) {
-    case 'PENDING':
-      return 'Em espera';
-    case 'FOUND':
-      return 'Encontrado';
-    case 'BOUGHT':
-      return 'Comprado';
-    case 'ARCHIVED':
-      return 'Removido';
-    default:
-      return status;
+    case 'PENDING': return 'Em espera';
+    case 'FOUND': return 'Encontrado';
+    case 'BOUGHT': return 'Comprado';
+    case 'ARCHIVED': return 'Removido';
+    default: return status;
   }
 }
 
@@ -109,38 +98,28 @@ export function WantedCarDetailsModal({
   function formatPhone(raw?: string | null): string {
     if (!raw) return '';
     const digits = raw.replace(/\D/g, '');
-    if (digits.length === 11) {
-      return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
-    }
-    if (digits.length === 10) {
-      return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
-    }
+    if (digits.length === 11) return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+    if (digits.length === 10) return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
     return raw;
   }
 
   const [mode, setMode] = useState<'vehicle' | 'client'>('vehicle');
-
-  // local state for client form
   const [clientName, setClientName] = useState<string>(wantedCar.clientName ?? '');
   const [clientPhone, setClientPhone] = useState<string>(wantedCar.clientPhone ?? '');
   const [seller, setSeller] = useState<string>(wantedCar.seller ?? '');
   const [clientPhoneError, setClientPhoneError] = useState<string | null>(null);
-
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [pendingSave, setPendingSave] = useState<boolean>(false);
 
-  // synchronize when wantedCar changes
   useEffect(() => {
     setClientName(wantedCar.clientName ?? '');
     setClientPhone(wantedCar.clientPhone ?? '');
     setSeller(wantedCar.seller ?? '');
     setClientPhoneError(null);
-    // when opening modal, start not editing
     setIsEditing(false);
     setPendingSave(false);
   }, [wantedCar.clientName, wantedCar.clientPhone, wantedCar.seller]);
 
-  // detect save completion
   useEffect(() => {
     if (pendingSave && clientSavingId === null) {
       setPendingSave(false);
@@ -150,11 +129,8 @@ export function WantedCarDetailsModal({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+      if (event.key === 'Escape') onClose();
     }
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
@@ -166,20 +142,41 @@ export function WantedCarDetailsModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="wanted-car-modal-title" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wanted-car-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal-header">
           <div>
             <div className="modal-eyebrow">Carro desejado</div>
-            <h3 id="wanted-car-modal-title" className="modal-title">{wantedCar.brand} {wantedCar.model}</h3>
+            <h3 id="wanted-car-modal-title" className="modal-title">
+              {wantedCar.brand} {wantedCar.model}
+            </h3>
           </div>
-          <button className="secondary modal-close" type="button" onClick={onClose}>
-            Fechar
+          <button className="secondary modal-close" type="button" onClick={onClose}
+            style={{ borderRadius: 14, height: 38, fontSize: 13 }}>
+            ✕ Fechar
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <button type="button" className={mode === 'vehicle' ? '' : 'secondary'} onClick={() => setMode('vehicle')}>Detalhes do Veículo</button>
-          <button type="button" className={mode === 'client' ? '' : 'secondary'} onClick={() => setMode('client')}>Detalhes do Cliente</button>
+        <div className="tab-group" style={{ marginTop: 16 }}>
+          <button
+            type="button"
+            className={mode !== 'vehicle' ? 'secondary' : ''}
+            onClick={() => setMode('vehicle')}
+          >
+            Veículo
+          </button>
+          <button
+            type="button"
+            className={mode !== 'client' ? 'secondary' : ''}
+            onClick={() => setMode('client')}
+          >
+            Cliente
+          </button>
         </div>
 
         <div className="modal-grid">
@@ -189,7 +186,7 @@ export function WantedCarDetailsModal({
                 <div className="modal-section-title">Detalhes cadastrados</div>
                 <div className="detail-row"><span>Condição</span><strong>{formatCondition(wantedCar.condition)}</strong></div>
                 <div className="detail-row"><span>Anunciante</span><strong>{formatSellerType(wantedCar.sellerType)}</strong></div>
-                <div className="detail-row"><span>Versao</span><strong>{wantedCar.version ?? '—'}</strong></div>
+                <div className="detail-row"><span>Versão</span><strong>{wantedCar.version ?? '—'}</strong></div>
                 <div className="detail-row"><span>Ano</span><strong>{formatYearRange(wantedCar.yearFrom, wantedCar.yearTo)}</strong></div>
                 <div className="detail-row"><span>KM</span><strong>{formatRange(wantedCar.mileageFrom, wantedCar.mileageTo, ' km')}</strong></div>
                 <div className="detail-row"><span>Preço máximo</span><strong>{formatMaxPrice(wantedCar.maxPrice)}</strong></div>
@@ -199,33 +196,45 @@ export function WantedCarDetailsModal({
               </>
             ) : (
               <>
-                <div className="modal-section-title">Detalhes do Cliente</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="modal-section-title">Dados do Cliente</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div className="field">
                     <label>Nome do cliente</label>
                     {isEditing ? (
-                      <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+                      <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nome completo" />
                     ) : (
-                      <div>{clientName || '—'}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: clientName ? 'var(--text)' : 'var(--muted)' }}>
+                        {clientName || '—'}
+                      </div>
                     )}
                   </div>
                   <div className="field">
                     <label>Telefone / WhatsApp</label>
                     {isEditing ? (
-                      <input type="text" value={clientPhone} onChange={(e) => setClientPhone(sanitizePhone(e.target.value))} inputMode="numeric" />
+                      <input
+                        type="text"
+                        value={clientPhone}
+                        onChange={(e) => setClientPhone(sanitizePhone(e.target.value))}
+                        inputMode="numeric"
+                        placeholder="11999999999"
+                      />
                     ) : (
-                      <div>{clientPhone ? formatPhone(clientPhone) : '—'}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: clientPhone ? 'var(--text)' : 'var(--muted)' }}>
+                        {clientPhone ? formatPhone(clientPhone) : '—'}
+                      </div>
                     )}
                   </div>
                   <div className="field">
                     <label>Vendedor responsável</label>
                     {isEditing ? (
-                      <input type="text" value={seller} onChange={(e) => setSeller(e.target.value)} />
+                      <input type="text" value={seller} onChange={(e) => setSeller(e.target.value)} placeholder="Nome do vendedor" />
                     ) : (
-                      <div>{seller || '—'}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: seller ? 'var(--text)' : 'var(--muted)' }}>
+                        {seller || '—'}
+                      </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                     {isEditing ? (
                       <>
                         <button
@@ -233,7 +242,7 @@ export function WantedCarDetailsModal({
                           disabled={clientSavingId === wantedCar.id}
                           onClick={() => {
                             if (clientPhone && !isValidMobilePhoneDigits(clientPhone)) {
-                              setClientPhoneError('Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.');
+                              setClientPhoneError('Telefone deve ter 11 dígitos e iniciar com 9 após o DDD.');
                               return;
                             }
                             setClientPhoneError(null);
@@ -247,20 +256,29 @@ export function WantedCarDetailsModal({
                             }
                           }}
                         >
-                          {clientSavingId === wantedCar.id ? 'Salvando...' : 'Salvar'}
+                          {clientSavingId === wantedCar.id ? 'Salvando...' : '✓ Salvar'}
                         </button>
-                        <button type="button" className="secondary" onClick={() => { setClientName(wantedCar.clientName ?? ''); setClientPhone(wantedCar.clientPhone ?? ''); setSeller(wantedCar.seller ?? ''); setIsEditing(false); }}>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => {
+                            setClientName(wantedCar.clientName ?? '');
+                            setClientPhone(wantedCar.clientPhone ?? '');
+                            setSeller(wantedCar.seller ?? '');
+                            setIsEditing(false);
+                          }}
+                        >
                           Cancelar
                         </button>
                       </>
                     ) : (
                       <button type="button" onClick={() => setIsEditing(true)}>
-                        Editar
+                        ✎ Editar dados
                       </button>
                     )}
                   </div>
-                  {clientPhoneError && <div className="error" style={{ marginTop: 8 }}>{clientPhoneError}</div>}
-                  {clientSaveError && <div className="error" style={{ marginTop: 8 }}>{clientSaveError}</div>}
+                  {clientPhoneError && <div className="error" style={{ marginTop: 4 }}>{clientPhoneError}</div>}
+                  {clientSaveError && <div className="error" style={{ marginTop: 4 }}>{clientSaveError}</div>}
                 </div>
               </>
             )}
@@ -270,21 +288,36 @@ export function WantedCarDetailsModal({
             {isBought ? (
               <div>
                 <div className="modal-section-title">Ações</div>
-                <div className="muted">Carro comprado. Ações desativadas.</div>
+                <div style={{
+                  padding: '12px 16px',
+                  background: 'var(--accent-light)',
+                  borderRadius: 14,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--accent)'
+                }}>
+                  ✓ Carro comprado
+                </div>
               </div>
             ) : (
               <>
                 <div>
                   <div className="modal-section-title">Ações</div>
-                  <div className="muted">
-                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button type="button" disabled={statusLoading} onClick={onMarkBought}>
-                    {statusLoading ? 'Atualizando...' : 'Marcar como comprado'}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button
+                    type="button"
+                    disabled={statusLoading}
+                    onClick={onMarkBought}
+                    style={{
+                      background: 'linear-gradient(145deg, #16a34a, #15803d)',
+                      boxShadow: '0 6px 20px rgba(22, 163, 74, 0.35), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -3px 0 rgba(0,0,0,0.12)'
+                    }}
+                  >
+                    {statusLoading ? 'Atualizando...' : '🏁 Marcar como comprado'}
                   </button>
                   <button type="button" className="secondary" disabled={statusLoading} onClick={onArchive}>
-                    {statusLoading ? 'Atualizando...' : 'Remover da lista'}
+                    {statusLoading ? 'Atualizando...' : '🗑 Remover da lista'}
                   </button>
                 </div>
                 {statusError && <div className="error" style={{ marginTop: 8 }}>{statusError}</div>}
@@ -293,33 +326,67 @@ export function WantedCarDetailsModal({
           </div>
         </div>
 
-        <div className="modal-section-title" style={{ marginTop: 20 }}>Anuncios encontrados</div>
-        {carsTotal > 0 && (
-          <div className="muted">
-            Mostrando {cars.length} de {carsTotal} anuncios.
+        <div style={{ marginTop: 24 }}>
+          <div className="modal-section-title">
+            Anúncios encontrados
+            {carsTotal > 0 && (
+              <span style={{
+                marginLeft: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '2px 10px',
+                borderRadius: 999,
+                background: 'var(--primary-light)',
+                color: 'var(--primary-dark)'
+              }}>
+                {carsTotal} no total
+              </span>
+            )}
           </div>
-        )}
-        <div className="modal-results">
-          {carsLoading ? (
-            <div className="muted">Carregando anuncios...</div>
-          ) : (
-            <CarList cars={cars} />
-          )}
-          {carsError && <div className="error" style={{ marginTop: 8 }}>{carsError}</div>}
-        </div>
-        {carsTotal > carsPageSize && (
-          <div className="pagination">
-            <button className="secondary" disabled={!canGoPrev || carsLoading} onClick={() => onPageChange(carsPage - 1)}>
-              Anterior
-            </button>
-            <div className="pagination-info">
-              Pagina {carsPage} de {totalPages}
+
+          <div className="modal-results">
+            {carsLoading ? (
+              <div style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: 'var(--muted)',
+                fontSize: 14,
+                background: 'linear-gradient(145deg, #f8fdff, #f0f9ff)',
+                borderRadius: 18,
+                border: '1.5px dashed rgba(8, 145, 178, 0.2)'
+              }}>
+                Carregando anúncios...
+              </div>
+            ) : (
+              <CarList cars={cars} />
+            )}
+            {carsError && <div className="error" style={{ marginTop: 8 }}>{carsError}</div>}
+          </div>
+
+          {carsTotal > carsPageSize && (
+            <div className="pagination">
+              <button
+                className="secondary"
+                disabled={!canGoPrev || carsLoading}
+                onClick={() => onPageChange(carsPage - 1)}
+                style={{ height: 36, padding: '0 14px', fontSize: 13 }}
+              >
+                ← Anterior
+              </button>
+              <div className="pagination-info">
+                Página {carsPage} de {totalPages}
+              </div>
+              <button
+                className="secondary"
+                disabled={!canGoNext || carsLoading}
+                onClick={() => onPageChange(carsPage + 1)}
+                style={{ height: 36, padding: '0 14px', fontSize: 13 }}
+              >
+                Próxima →
+              </button>
             </div>
-            <button className="secondary" disabled={!canGoNext || carsLoading} onClick={() => onPageChange(carsPage + 1)}>
-              Proxima
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

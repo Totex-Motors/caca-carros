@@ -651,11 +651,16 @@ export function Home() {
 
   return (
     <div className="container">
-      <h1 className="title">Caça Carros</h1>
+      <div className="app-header">
+        <h1 className="title">Caça Carros</h1>
+        <p className="app-subtitle">Cadastre os carros desejados e encontre os melhores anúncios automaticamente</p>
+      </div>
 
       <form className="card" onSubmit={createWanted}>
-        <h2 style={{ marginTop: 0 }}>Cadastrar carro desejado</h2>
-        <div className="muted" style={{ marginBottom: 12 }}>Campos obrigatorios: Marca e Modelo.</div>
+        <h2 style={{ marginTop: 0, marginBottom: 4, fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
+          Cadastrar carro desejado
+        </h2>
+        <div className="muted" style={{ marginBottom: 16 }}>Campos obrigatórios: Marca e Modelo.</div>
 
         <div className="row">
           <div className="field">
@@ -812,96 +817,177 @@ export function Home() {
           </div>
         </div>
 
-        <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button disabled={loading} type="submit">Cadastrar</button>
+        <div style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button disabled={loading} type="submit">
+            {loading ? 'Cadastrando...' : '+ Cadastrar'}
+          </button>
         </div>
 
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         {fipeError && <div className="error" style={{ marginTop: 8 }}>{fipeError}</div>}
-        <div className="muted" style={{ marginTop: 10 }}>
-        </div>
       </form>
 
       <div className="divider" />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
-        <h2 style={{ margin: 0 }}>Carros em espera</h2>
-        <button className="secondary" disabled={loading} onClick={loadWanted}>{loading ? 'Atualizando...' : 'Atualizar lista'}</button>
+      <div className="section-header">
+        <h2 className="section-title">Carros em espera</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {searchSchedule?.nextRunAt && (
+            <span className="schedule-chip">
+              ⏰ Próxima busca: {formatNextRun(searchSchedule.nextRunAt)}
+            </span>
+          )}
+          <button className="secondary" style={{ height: 36, fontSize: 13 }} disabled={loading} onClick={loadWanted}>
+            {loading ? 'Atualizando...' : '↻ Atualizar'}
+          </button>
+        </div>
       </div>
 
-      {searchScheduleError && <div className="error" style={{ marginTop: 12 }}>{searchScheduleError}</div>}
+      {searchScheduleError && <div className="error" style={{ marginBottom: 12 }}>{searchScheduleError}</div>}
 
-      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {waitingCars.map((w) => (
           <div key={w.id} className={w.status === 'FOUND' ? 'card card-found' : 'card'}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 800 }}>{w.brand} {w.model}</div>
-                <div className="muted">
-                  Condição: {formatCondition(w.condition)} • Ano: {formatYearRange(w.yearFrom, w.yearTo)} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 800, fontSize: 16 }}>{w.brand} {w.model}</span>
+                  <span className={`badge badge-${w.status.toLowerCase()}`}>
+                    {formatStatus(w.status)}
+                  </span>
                 </div>
-                {w.version && <div className="muted">Versao: {w.version}</div>}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <span className="muted">📅 {formatYearRange(w.yearFrom, w.yearTo)}</span>
+                  <span className="muted">🛣️ {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'} km</span>
+                  <span className="muted">💰 Máx: {formatMaxPrice(Number(w.maxPrice))}</span>
+                  {w.condition && <span className="muted">🏷 {formatCondition(w.condition)}</span>}
+                </div>
+                {w.version && <div className="muted" style={{ marginTop: 4 }}>Versão: {w.version}</div>}
                 {w.sellerType && <div className="muted">Anunciante: {formatSellerType(w.sellerType)}</div>}
-                <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
-                {w.clientName && <div style={{ marginTop: 6 }}><strong>Cliente:</strong> {w.clientName}</div>}
-                {w.clientPhone && <div className="muted">{formatPhone(w.clientPhone)}</div>}
-                {w.seller && <div className="muted">Vendedor: {w.seller}</div>}
+                {(w.clientName || w.seller) && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {w.clientName && (
+                      <span style={{ fontSize: 13 }}>
+                        <strong>Cliente:</strong> {w.clientName}
+                        {w.clientPhone && ` • ${formatPhone(w.clientPhone)}`}
+                      </span>
+                    )}
+                    {w.seller && <span style={{ fontSize: 13 }}><strong>Vendedor:</strong> {w.seller}</span>}
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                 {w.searching && (
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', alignSelf: 'center' }}>
-                    ⏳ Buscando nos portais...
+                  <span className="schedule-chip" style={{ color: '#1d4ed8', background: '#dbeafe', borderColor: 'rgba(29,78,216,0.2)' }}>
+                    ⏳ Buscando...
                   </span>
                 )}
                 {!w.searching && w.status === 'PENDING' && searchSchedule?.nextRunAt && (
-                  <span className="muted" style={{ fontSize: 13, alignSelf: 'center' }}>
-                    Próxima busca {formatCountdown(searchSchedule.nextRunAt, now)}
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {formatCountdown(searchSchedule.nextRunAt, now)}
                   </span>
                 )}
-                <button className="secondary" disabled={loading} onClick={() => openWantedDetails(w.id)}>
-                  Detalhes
+                <button
+                  className="secondary"
+                  style={{ height: 36, fontSize: 13, borderRadius: 12 }}
+                  disabled={loading}
+                  onClick={() => openWantedDetails(w.id)}
+                >
+                  Ver detalhes →
                 </button>
               </div>
             </div>
           </div>
         ))}
 
-        {!waitingCars.length && <div className="muted">Nenhum carro em espera no momento.</div>}
+        {!waitingCars.length && (
+          <div style={{
+            padding: '32px',
+            textAlign: 'center',
+            color: 'var(--muted)',
+            fontSize: 14,
+            background: 'linear-gradient(145deg, #f8fdff, #f0f9ff)',
+            borderRadius: 20,
+            border: '1.5px dashed rgba(8, 145, 178, 0.2)'
+          }}>
+            Nenhum carro em espera no momento.
+          </div>
+        )}
       </div>
 
       <div className="divider" />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Carros comprados</h2>
-        <div className="muted">Total: {boughtCars.length}</div>
+      <div className="section-header">
+        <h2 className="section-title">Carros comprados</h2>
+        <span style={{
+          fontSize: 13,
+          fontWeight: 700,
+          padding: '4px 14px',
+          borderRadius: 999,
+          background: 'var(--accent-light)',
+          color: 'var(--accent)',
+          border: '1px solid rgba(124,58,237,0.2)'
+        }}>
+          {boughtCars.length} {boughtCars.length === 1 ? 'carro' : 'carros'}
+        </span>
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {boughtCars.map((w) => (
-          <div key={w.id} className="card">
+          <div key={w.id} className="card" style={{
+            background: 'linear-gradient(145deg, #faf5ff 0%, #f3e8ff 40%, #ffffff 100%)',
+            borderColor: 'rgba(124, 58, 237, 0.2)'
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 800 }}>{w.brand} {w.model}</div>
-                <div className="muted">
-                  Condição: {formatCondition(w.condition)} • Ano: {formatYearRange(w.yearFrom, w.yearTo)} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 800, fontSize: 16 }}>{w.brand} {w.model}</span>
+                  <span className="badge badge-bought">{formatStatus(w.status)}</span>
                 </div>
-                {w.version && <div className="muted">Versao: {w.version}</div>}
-                {w.sellerType && <div className="muted">Anunciante: {formatSellerType(w.sellerType)}</div>}
-                <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
-                {w.clientName && <div style={{ marginTop: 6 }}><strong>Cliente:</strong> {w.clientName}</div>}
-                {w.clientPhone && <div className="muted">{formatPhone(w.clientPhone)}</div>}
-                {w.seller && <div className="muted">Vendedor: {w.seller}</div>}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <span className="muted">📅 {formatYearRange(w.yearFrom, w.yearTo)}</span>
+                  <span className="muted">🛣️ {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'} km</span>
+                  <span className="muted">💰 Máx: {formatMaxPrice(Number(w.maxPrice))}</span>
+                </div>
+                {(w.clientName || w.seller) && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {w.clientName && (
+                      <span style={{ fontSize: 13 }}>
+                        <strong>Cliente:</strong> {w.clientName}
+                        {w.clientPhone && ` • ${formatPhone(w.clientPhone)}`}
+                      </span>
+                    )}
+                    {w.seller && <span style={{ fontSize: 13 }}><strong>Vendedor:</strong> {w.seller}</span>}
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                <button className="secondary" disabled={loading} onClick={() => openWantedDetails(w.id)}>
-                  Detalhes
+                <button
+                  className="secondary"
+                  style={{ height: 36, fontSize: 13, borderRadius: 12 }}
+                  disabled={loading}
+                  onClick={() => openWantedDetails(w.id)}
+                >
+                  Ver detalhes →
                 </button>
               </div>
             </div>
           </div>
         ))}
 
-        {!boughtCars.length && <div className="muted">Nenhum carro comprado ainda.</div>}
+        {!boughtCars.length && (
+          <div style={{
+            padding: '32px',
+            textAlign: 'center',
+            color: 'var(--muted)',
+            fontSize: 14,
+            background: 'linear-gradient(145deg, #faf5ff, #f3e8ff)',
+            borderRadius: 20,
+            border: '1.5px dashed rgba(124, 58, 237, 0.2)'
+          }}>
+            Nenhum carro comprado ainda.
+          </div>
+        )}
       </div>
 
       {selectedWantedCar && (
