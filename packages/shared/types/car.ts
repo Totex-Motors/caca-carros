@@ -21,6 +21,7 @@ export type WantedCarDTO = {
   maxPrice: number;
   status: WantedCarStatus;
   createdAt: string;
+  searching: boolean;
   cars?: CarDTO[];
 };
 
@@ -35,4 +36,5 @@ export type CarDTO = {
   state: string | null;
   photos: string[];
   url: string;
+  portal: string | null;
 };

@@ -51,7 +51,7 @@ function normalizePhotos(photos: string[], sourceUrl: string): string[] {
   return output;
 }
 
-export function mapExternalCarToCreateInput(external: ExternalCar, wanted: WantedCarLike) {
+export function mapExternalCarToCreateInput(external: ExternalCar, wanted: WantedCarLike, portal?: string | null) {
   const photos = normalizePhotos(external.photos, external.url);
   const fallbackPhoto = normalizeFallbackPhoto(readEnv('DEFAULT_CAR_PHOTO_URL'));
   const resolvedPhotos = photos.length > 0 ? photos : fallbackPhoto ? [fallbackPhoto] : [];
@@ -71,6 +71,7 @@ export function mapExternalCarToCreateInput(external: ExternalCar, wanted: Wante
     photos: resolvedPhotos,
     url: external.url,
     image: resolvedPhotos[0] ?? null,
+    portal: portal ?? null,
     wantedCarId: wanted.id
   };
 }

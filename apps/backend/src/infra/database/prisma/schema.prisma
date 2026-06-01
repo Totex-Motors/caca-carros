@@ -71,6 +71,7 @@ model Car {
   photos      String[] @default([])
   url         String
   image       String?
+  portal      String?
   createdAt   DateTime @default(now()) @map("created_at")
   deletedAt   DateTime? @map("deleted_at")
   wantedCarId String   @map("wanted_car_id")

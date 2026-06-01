@@ -122,7 +122,8 @@ export function buildWebmotorsSearchUrl(params: SearchCarParams): string {
   );
 
   const autocompleteModel = model.displayModel || params.model.trim();
-  const autocompleteTerm = [brand.display, autocompleteModel].filter(Boolean).join(' ').trim();
+  const versionSuffix = params.version ? ` ${params.version.trim()}` : '';
+  const autocompleteTerm = [brand.display, autocompleteModel].filter(Boolean).join(' ').trim() + versionSuffix;
 
   url.searchParams.set('lkid', lkid);
   url.searchParams.set('tipoveiculo', tipoveiculo);
@@ -139,9 +140,10 @@ export function buildWebmotorsSearchUrl(params: SearchCarParams): string {
   const sellerType = resolveSellerType(params.sellerType);
   if (sellerType) url.searchParams.set('anunciante', sellerType);
 
-  const yearTo = params.yearTo ?? params.yearFrom;
-  if (params.yearFrom) url.searchParams.set('anode', String(params.yearFrom));
-  if (yearTo) url.searchParams.set('anoate', String(yearTo));
+  const yearFrom = params.yearFrom && params.yearFrom > 1900 ? params.yearFrom : null;
+  const yearTo = yearFrom !== null ? (params.yearTo ?? params.yearFrom) : null;
+  if (yearFrom !== null) url.searchParams.set('anode', String(yearFrom));
+  if (yearTo !== null) url.searchParams.set('anoate', String(yearTo));
 
   const maxPrice = toPositiveInteger(params.maxPrice);
   if (maxPrice !== null) {

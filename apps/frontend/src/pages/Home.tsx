@@ -56,12 +56,6 @@ type SearchScheduleResponse = {
   nextRunAt: string | null;
 };
 
-type SearchWantedResponse = {
-  wantedCarId: string;
-  adsFound: number;
-  carsSaved: number;
-  message: string;
-};
 
 const MAX_PRICE_FALLBACK = 2147483647;
 
@@ -285,8 +279,6 @@ export function Home() {
   const [fipeError, setFipeError] = useState<string | null>(null);
   const [searchSchedule, setSearchSchedule] = useState<SearchScheduleResponse | null>(null);
   const [searchScheduleError, setSearchScheduleError] = useState<string | null>(null);
-  const [searchingWantedId, setSearchingWantedId] = useState<string | null>(null);
-  const [searchError, setSearchError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const [form, setForm] = useState<CreateWantedInput>(createEmptyForm());
@@ -397,6 +389,16 @@ export function Home() {
 
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const anySearching = wantedCars.some((w) => w.searching);
+    if (!anySearching) return;
+    const interval = window.setInterval(() => {
+      loadWanted();
+    }, 15000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantedCars]);
 
   useEffect(() => {
     if (!selectedWantedId) return;
@@ -647,21 +649,6 @@ export function Home() {
     }
   }
 
-  async function searchWantedCar(wantedCarId: string): Promise<void> {
-    setSearchError(null);
-    setSearchingWantedId(wantedCarId);
-
-    try {
-      await api.post<SearchWantedResponse>('/cars/search', { wantedCarId });
-      await loadWanted();
-    } catch (err) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setSearchError(message ?? 'Falha ao buscar o carro agora.');
-    } finally {
-      setSearchingWantedId(null);
-    }
-  }
-
   return (
     <div className="container">
       <h1 className="title">Caça Carros</h1>
@@ -832,7 +819,6 @@ export function Home() {
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         {fipeError && <div className="error" style={{ marginTop: 8 }}>{fipeError}</div>}
         <div className="muted" style={{ marginTop: 10 }}>
-          Ao cadastrar, o carro entra na lista e a busca automatica roda via cron a cada 12h (configuravel).
         </div>
       </form>
 
@@ -844,7 +830,6 @@ export function Home() {
       </div>
 
       {searchScheduleError && <div className="error" style={{ marginTop: 12 }}>{searchScheduleError}</div>}
-      {searchError && <div className="error" style={{ marginTop: 12 }}>{searchError}</div>}
 
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {waitingCars.map((w) => (
@@ -863,16 +848,16 @@ export function Home() {
                 {w.seller && <div className="muted">Vendedor: {w.seller}</div>}
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  disabled={loading || searchingWantedId === w.id || !searchSchedule?.enabled || w.status !== 'PENDING'}
-                  onClick={() => searchWantedCar(w.id)}
-                >
-                  {searchingWantedId === w.id
-                    ? 'Buscando...'
-                    : w.status === 'PENDING'
-                      ? `Buscar carro ${searchSchedule?.nextRunAt ? `• ${formatCountdown(searchSchedule.nextRunAt, now)}` : ''}`
-                      : 'Busca encerrada'}
-                </button>
+                {w.searching && (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', alignSelf: 'center' }}>
+                    ⏳ Buscando nos portais...
+                  </span>
+                )}
+                {!w.searching && w.status === 'PENDING' && searchSchedule?.nextRunAt && (
+                  <span className="muted" style={{ fontSize: 13, alignSelf: 'center' }}>
+                    Próxima busca {formatCountdown(searchSchedule.nextRunAt, now)}
+                  </span>
+                )}
                 <button className="secondary" disabled={loading} onClick={() => openWantedDetails(w.id)}>
                   Detalhes
                 </button>

@@ -277,7 +277,6 @@ export function WantedCarDetailsModal({
                 <div>
                   <div className="modal-section-title">Ações</div>
                   <div className="muted">
-                    As buscas sao automaticas pelo cronjob. Quando o carro sai de PENDING, ele para de ser procurado.
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

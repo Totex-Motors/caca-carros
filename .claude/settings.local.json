@@ -10,7 +10,12 @@
       "Bash(xargs grep -l \"APIFY\\\\|WEBMOTORS\")",
       "WebFetch(domain:apify.com)",
       "Bash(git -C \"C:\\\\Users\\\\USER\\\\Desktop\\\\ca-a-carros\" diff HEAD -- \"apps/backend/src/infra/providers/apify/apify-cars.provider.ts\")",
-      "Bash(git *)"
+      "Bash(git *)",
+      "PowerShell(docker compose *)",
+      "PowerShell(docker exec caca_backend *)",
+      "PowerShell(docker exec caca_postgres *)",
+      "Bash(docker exec caca_postgres *)",
+      "PowerShell(tail *)"
     ]
   }
 }

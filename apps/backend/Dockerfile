@@ -21,4 +21,5 @@ RUN npm run build -w apps/backend
 
 EXPOSE 3333
 
-CMD ["npm", "start", "-w", "apps/backend"]
+# Run migrations then start server
+CMD ["sh", "-c", "npx prisma migrate deploy --schema apps/backend/src/infra/database/prisma/schema.prisma && npm run db:seed -w apps/backend && npm start -w apps/backend"]

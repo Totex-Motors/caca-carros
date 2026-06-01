@@ -13,6 +13,10 @@ COPY apps/frontend ./apps/frontend
 # Install dependencies
 RUN npm install
 
+# Build arg baked into the Vite bundle
+ARG VITE_API_URL=http://localhost:3333
+ENV VITE_API_URL=$VITE_API_URL
+
 # Build frontend
 RUN npm run build -w apps/frontend
 

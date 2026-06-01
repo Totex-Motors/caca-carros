@@ -5,12 +5,6 @@ function formatNumber(value: number | null, suffix = ''): string {
   return `${value.toLocaleString('pt-BR')}${suffix}`;
 }
 
-function formatLocation(city: string | null, state: string | null): string {
-  if (city && state) return `${city} • ${state}`;
-  if (city) return city;
-  if (state) return state;
-  return '—';
-}
 
 export function CarList(props: { cars: CarDTO[] }) {
   if (!props.cars.length) {
@@ -28,6 +22,7 @@ export function CarList(props: { cars: CarDTO[] }) {
                 <img
                   src={photo}
                   alt={car.title}
+                  referrerPolicy="no-referrer"
                   style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }}
                 />
               ) : (
@@ -51,13 +46,21 @@ export function CarList(props: { cars: CarDTO[] }) {
               )}
 
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{car.title}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700 }}>{car.title}</span>
+                  {car.portal && (
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 999, background: '#f1f5f9', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {car.portal}
+                    </span>
+                  )}
+                </div>
                 <div className="muted">Ano: {car.year}</div>
                 <div className="muted">
                   KM: {formatNumber(car.km)} • Comb.: {car.fuel_type ?? '—'} • Cambio: {car.transmission ?? '—'}
                 </div>
-                <div className="muted">Local: {formatLocation(car.city, car.state)}</div>
-                <div style={{ marginTop: 6, fontWeight: 700 }}>R$ {car.price.toLocaleString('pt-BR')}</div>
+                <div style={{ marginTop: 6, fontWeight: 700 }}>
+                  {car.price > 0 ? `R$ ${car.price.toLocaleString('pt-BR')}` : <span className="muted">Sem preço</span>}
+                </div>
                 <div style={{ marginTop: 6 }}>
                   <a href={car.url} target="_blank" rel="noreferrer">Ver anuncio</a>
                 </div>
