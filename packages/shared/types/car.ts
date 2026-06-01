@@ -1,5 +1,6 @@
 export type WantedCarStatus = 'PENDING' | 'FOUND' | 'BOUGHT' | 'ARCHIVED';
 export type WantedCarCondition = 'NEW' | 'USED';
+export type WantedCarSellerType = 'PRIVATE' | 'PROFESSIONAL';
 
 export type JwtToken = string;
 
@@ -11,6 +12,7 @@ export type WantedCarDTO = {
   clientName?: string | null;
   clientPhone?: string | null;
   seller?: string | null;
+  sellerType?: WantedCarSellerType | null;
   condition: WantedCarCondition | null;
   yearFrom: number;
   yearTo: number | null;

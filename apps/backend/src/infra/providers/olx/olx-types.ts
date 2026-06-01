@@ -10,6 +10,7 @@ export type OlxSearchFilters = {
   yearMin: number | null;
   yearMax: number | null;
   condition: 'NEW' | 'USED' | null;
+  sellerType: 'PRIVATE' | 'PROFESSIONAL' | null;
 };
 
 export type OlxScrapeOptions = {

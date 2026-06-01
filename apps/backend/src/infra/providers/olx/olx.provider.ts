@@ -11,6 +11,18 @@ function clampAdsLimit(value: number): number {
   return Math.min(10, Math.max(5, value));
 }
 
+function isStickySessionEnabled(): boolean {
+  const flag = process.env.OLX_STICKY_SESSION ?? 'false';
+  return flag.toLowerCase() === 'true';
+}
+
+function buildSessionId(filters: OlxSearchFilters): string {
+  const base = `olx-${slugify(filters.brand)}-${slugify(filters.model)}`;
+  if (isStickySessionEnabled()) return base;
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${base}-${suffix}`;
+}
+
 function toPositiveInteger(value: number | null): number | null {
   if (value === null) return null;
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -44,27 +56,33 @@ function normalizeFilters(params: SearchCarParams): OlxSearchFilters {
     kmMax: toPositiveInteger(params.mileageTo ?? null),
     yearMin,
     yearMax,
-    condition: params.condition
+    condition: params.condition,
+    sellerType: params.sellerType ?? null
   };
 }
 
 function shouldSkipByRange(listing: OlxListing, filters: OlxSearchFilters): boolean {
-  if (listing.price === null) return true;
-  if (filters.priceMin !== null && listing.price < filters.priceMin) return true;
-  if (filters.priceMax !== null && listing.price > filters.priceMax) return true;
+  if (listing.price === null) {
+    if (filters.priceMin !== null || filters.priceMax !== null) return true;
+  } else {
+    if (filters.priceMin !== null && listing.price < filters.priceMin) return true;
+    if (filters.priceMax !== null && listing.price > filters.priceMax) return true;
+  }
 
   const year = listing.year;
-  if (year !== null) {
+  if (year === null) {
+    if (filters.yearMin !== null || filters.yearMax !== null) return true;
+  } else {
     if (filters.yearMin !== null && year < filters.yearMin) return true;
     if (filters.yearMax !== null && year > filters.yearMax) return true;
   }
 
   const km = listing.km;
-  if (filters.kmMin !== null || filters.kmMax !== null) {
-    if (km !== null) {
-      if (filters.kmMin !== null && km < filters.kmMin) return true;
-      if (filters.kmMax !== null && km > filters.kmMax) return true;
-    }
+  if (km === null) {
+    if (filters.kmMin !== null || filters.kmMax !== null) return true;
+  } else if (filters.kmMin !== null || filters.kmMax !== null) {
+    if (filters.kmMin !== null && km < filters.kmMin) return true;
+    if (filters.kmMax !== null && km > filters.kmMax) return true;
   }
 
   return false;
@@ -114,7 +132,7 @@ export class OlxProvider {
       maxAds: adsLimit,
       maxPages,
       retryAttempts,
-      sessionId: `olx-${slugify(filters.brand)}-${slugify(filters.model)}`
+      sessionId: buildSessionId(filters)
     });
 
     const versionTokens = buildVersionTokens(filters.version);

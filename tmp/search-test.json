@@ -1,0 +1,20 @@
+﻿{
+    "wantedCarId":  "bb2b8fe8-9e35-4447-ad2c-ba99b3d8234a",
+    "filters":  {
+                    "yearFrom":  2018,
+                    "yearTo":  2020,
+                    "mileageFrom":  20000,
+                    "mileageTo":  60000,
+                    "maxPrice":  120000,
+                    "condition":  "USED"
+                },
+    "webmotorsFound":  9,
+    "webmotorsSaved":  9,
+    "olxFound":  0,
+    "olxSaved":  0,
+    "totalSaved":  9,
+    "violationCount":  0,
+    "violationSamples":  {
+
+                         }
+}

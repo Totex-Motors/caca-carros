@@ -8,6 +8,7 @@ export type WantedCarEntity = {
   clientName?: string | null;
   clientPhone?: string | null;
   seller?: string | null;
+  sellerType?: 'PRIVATE' | 'PROFESSIONAL' | null;
   yearFrom: number;
   yearTo: number | null;
   mileageFrom: number | null;

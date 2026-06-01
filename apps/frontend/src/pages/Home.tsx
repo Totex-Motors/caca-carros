@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CarDTO, WantedCarCondition, WantedCarDTO, WantedCarStatus } from '@caca/shared/types/car';
+import type { CarDTO, WantedCarCondition, WantedCarDTO, WantedCarSellerType, WantedCarStatus } from '@caca/shared/types/car';
 import { api } from '../services/api';
 import { WantedCarDetailsModal } from '../components/WantedCarDetailsModal';
 import { getFipeBrands, getFipeModels, getFipeYears, type FipeBrand, type FipeModel, type FipeYear } from '../services/fipe';
@@ -13,6 +13,7 @@ type CreateWantedInput = {
   variantCode: string;
   version: string;
   condition: WantedCarCondition | '';
+  sellerType: WantedCarSellerType | '';
   yearFromCode: string;
   yearToCode: string;
   mileageFrom: string;
@@ -48,7 +49,14 @@ type PaginatedCarsResponse = {
   totalPages: number;
 };
 
-type ManualSearchResponse = {
+type SearchScheduleResponse = {
+  enabled: boolean;
+  cron: string;
+  timezone: string;
+  nextRunAt: string | null;
+};
+
+type SearchWantedResponse = {
   wantedCarId: string;
   adsFound: number;
   carsSaved: number;
@@ -64,12 +72,13 @@ function createEmptyForm(): CreateWantedInput {
     variantCode: '',
     version: '',
     condition: '',
+    sellerType: '',
     yearFromCode: '',
     yearToCode: '',
     mileageFrom: '',
     mileageTo: '',
-    maxPrice: ''
-    ,clientName: '',
+    maxPrice: '',
+    clientName: '',
     clientPhone: '',
     seller: ''
   };
@@ -100,6 +109,10 @@ function sanitizeNumberInput(value: string): string {
   return value.replace(/\D/g, '');
 }
 
+function isValidMobilePhoneDigits(value: string): boolean {
+  return value.length === 11 && value[2] === '9';
+}
+
 function formatNumberInput(value: string): string {
   if (!value) return '';
   const parsed = Number(value);
@@ -110,6 +123,30 @@ function formatNumberInput(value: string): string {
 function formatMaxPrice(value: number): string {
   if (!Number.isFinite(value) || value >= MAX_PRICE_FALLBACK) return 'Sem limite';
   return `R$ ${value.toLocaleString('pt-BR')}`;
+}
+
+function formatNextRun(nextRunAt: string | null): string {
+  if (!nextRunAt) return 'Indisponivel';
+  return new Date(nextRunAt).toLocaleString('pt-BR');
+}
+
+function formatCountdown(nextRunAt: string | null, now: number): string {
+  if (!nextRunAt) return 'sem agenda';
+
+  const diffMs = new Date(nextRunAt).getTime() - now;
+  if (diffMs <= 0) return 'em instantes';
+
+  const totalMinutes = Math.ceil(diffMs / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
+
+  return `em ${parts.join(' ')}`;
 }
 
 function formatStatus(status: WantedCarStatus): string {
@@ -138,6 +175,17 @@ function formatCondition(condition: WantedCarCondition | null): string {
   }
 }
 
+function formatSellerType(sellerType: WantedCarSellerType | null | undefined): string {
+  switch (sellerType) {
+    case 'PRIVATE':
+      return 'Particular';
+    case 'PROFESSIONAL':
+      return 'Loja / Concessionária';
+    default:
+      return 'Qualquer';
+  }
+}
+
 function formatPhone(raw?: string | null): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '');
@@ -148,6 +196,14 @@ function formatPhone(raw?: string | null): string {
     return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
   }
   return raw;
+}
+
+function formatYearRange(yearFrom: number | null, yearTo: number | null): string {
+  if (yearFrom !== null && yearFrom <= 1900) return 'Qualquer Ano';
+  if (yearFrom !== null && yearTo !== null) return `${yearFrom} a ${yearTo}`;
+  if (yearFrom !== null) return `${yearFrom} a —`;
+  if (yearTo !== null) return `— a ${yearTo}`;
+  return 'Qualquer Ano';
 }
 
 const FIPE_TRIM_MARKERS = new Set([
@@ -209,10 +265,6 @@ export function Home() {
   const [wantedCars, setWantedCars] = useState<WantedCarDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoSearchNotice, setAutoSearchNotice] = useState<string | null>(null);
-  const [autoSearchLoadingId, setAutoSearchLoadingId] = useState<string | null>(null);
-  const [autoSearchOlxNotice, setAutoSearchOlxNotice] = useState<string | null>(null);
-  const [autoSearchOlxLoadingId, setAutoSearchOlxLoadingId] = useState<string | null>(null);
   const [selectedWantedId, setSelectedWantedId] = useState<string | null>(null);
   const [carsPage, setCarsPage] = useState(1);
   const [carsPageSize] = useState(10);
@@ -231,10 +283,15 @@ export function Home() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [yearsLoading, setYearsLoading] = useState(false);
   const [fipeError, setFipeError] = useState<string | null>(null);
+  const [searchSchedule, setSearchSchedule] = useState<SearchScheduleResponse | null>(null);
+  const [searchScheduleError, setSearchScheduleError] = useState<string | null>(null);
+  const [searchingWantedId, setSearchingWantedId] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const [form, setForm] = useState<CreateWantedInput>(createEmptyForm());
 
-  const hasToken = useMemo(() => Boolean(localStorage.getItem('token')), []);
+  const hasToken = Boolean(localStorage.getItem('token'));
   const selectedWantedCar = useMemo(
     () => wantedCars.find((wanted) => wanted.id === selectedWantedId) ?? null,
     [selectedWantedId, wantedCars]
@@ -278,10 +335,26 @@ export function Home() {
     try {
       const { data } = await api.get<WantedCarDTO[]>('/cars/wanted');
       setWantedCars(data);
-    } catch {
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
       setError('Falha ao carregar carros desejados (verifique login).');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadSearchSchedule() {
+    setSearchScheduleError(null);
+    try {
+      const { data } = await api.get<SearchScheduleResponse>('/cars/search-schedule');
+      setSearchSchedule(data);
+    } catch {
+      setSearchScheduleError('Falha ao carregar agenda de busca automatica.');
     }
   }
 
@@ -313,7 +386,16 @@ export function Home() {
       return;
     }
     loadWanted();
+    loadSearchSchedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -429,6 +511,12 @@ export function Home() {
       return;
     }
 
+    if (form.clientPhone && !isValidMobilePhoneDigits(form.clientPhone)) {
+      setError('Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.');
+      setLoading(false);
+      return;
+    }
+
     if (selectedYearFrom && selectedYearTo && selectedYearFrom.year > selectedYearTo.year) {
       setError('O ano minimo nao pode ser maior que o ano maximo.');
       setLoading(false);
@@ -449,6 +537,7 @@ export function Home() {
         clientName: form.clientName?.trim() || null,
         clientPhone: form.clientPhone?.trim() || null,
         seller: form.seller?.trim() || null,
+        sellerType: form.sellerType || null,
         condition: form.condition || null,
         yearFrom: selectedYearFrom?.year ?? null,
         yearTo: selectedYearTo?.year ?? null,
@@ -509,8 +598,6 @@ export function Home() {
 
   function openWantedDetails(wantedCarId: string) {
     setSelectedWantedId(wantedCarId);
-    setAutoSearchNotice(null);
-    setAutoSearchOlxNotice(null);
     setStatusError(null);
     setCarsPage(1);
     setCarsData([]);
@@ -520,45 +607,11 @@ export function Home() {
 
   function closeWantedDetails() {
     setSelectedWantedId(null);
-    setAutoSearchNotice(null);
-    setAutoSearchOlxNotice(null);
     setStatusError(null);
     setCarsPage(1);
     setCarsData([]);
     setCarsTotal(0);
     setCarsError(null);
-  }
-
-  async function handleAutoSearch(wantedCarId: string) {
-    if (autoSearchLoadingId === wantedCarId) return;
-    setAutoSearchNotice(null);
-    setAutoSearchLoadingId(wantedCarId);
-    try {
-      const { data } = await api.post<ManualSearchResponse>('/cars/search-external', { wantedCarId });
-      setAutoSearchNotice(data.message || 'Busca concluida.');
-      await loadWanted();
-      await loadCarsPage(wantedCarId, 1);
-    } catch {
-      setAutoSearchNotice('Falha ao buscar anuncios na Webmotors.');
-    } finally {
-      setAutoSearchLoadingId(null);
-    }
-  }
-
-  async function handleAutoSearchOlx(wantedCarId: string) {
-    if (autoSearchOlxLoadingId === wantedCarId) return;
-    setAutoSearchOlxNotice(null);
-    setAutoSearchOlxLoadingId(wantedCarId);
-    try {
-      const { data } = await api.post<ManualSearchResponse>('/cars/search-olx', { wantedCarId });
-      setAutoSearchOlxNotice(data.message || 'Busca OLX concluida.');
-      await loadWanted();
-      await loadCarsPage(wantedCarId, 1);
-    } catch {
-      setAutoSearchOlxNotice('Falha ao buscar anuncios na OLX.');
-    } finally {
-      setAutoSearchOlxLoadingId(null);
-    }
   }
 
   function handleCarsPageChange(page: number) {
@@ -594,13 +647,28 @@ export function Home() {
     }
   }
 
+  async function searchWantedCar(wantedCarId: string): Promise<void> {
+    setSearchError(null);
+    setSearchingWantedId(wantedCarId);
+
+    try {
+      await api.post<SearchWantedResponse>('/cars/search', { wantedCarId });
+      await loadWanted();
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setSearchError(message ?? 'Falha ao buscar o carro agora.');
+    } finally {
+      setSearchingWantedId(null);
+    }
+  }
+
   return (
     <div className="container">
       <h1 className="title">Caça Carros</h1>
 
       <form className="card" onSubmit={createWanted}>
         <h2 style={{ marginTop: 0 }}>Cadastrar carro desejado</h2>
-        <div className="muted" style={{ marginBottom: 12 }}>Campos obrigatorios: Marca e Modelo. Novo/Usado e os demais filtros sao opcionais.</div>
+        <div className="muted" style={{ marginBottom: 12 }}>Campos obrigatorios: Marca e Modelo.</div>
 
         <div className="row">
           <div className="field">
@@ -647,6 +715,19 @@ export function Home() {
               <option value="">Qualquer</option>
               <option value="NEW">Novo</option>
               <option value="USED">Usado</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label>Anunciante (opcional)</label>
+            <select
+              value={form.sellerType}
+              onChange={(e) => setForm((s) => ({ ...s, sellerType: e.target.value as WantedCarSellerType | '' }))}
+              disabled={loading}
+            >
+              <option value="">Qualquer</option>
+              <option value="PRIVATE">Particular</option>
+              <option value="PROFESSIONAL">Loja / Concessionária</option>
             </select>
           </div>
 
@@ -751,35 +832,49 @@ export function Home() {
         {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         {fipeError && <div className="error" style={{ marginTop: 8 }}>{fipeError}</div>}
         <div className="muted" style={{ marginTop: 10 }}>
-          Ao cadastrar, o carro entra na lista sem buscar automaticamente. Use o botao de detalhes para buscar anuncios.
+          Ao cadastrar, o carro entra na lista e a busca automatica roda via cron a cada 12h (configuravel).
         </div>
       </form>
 
       <div className="divider" />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
         <h2 style={{ margin: 0 }}>Carros em espera</h2>
         <button className="secondary" disabled={loading} onClick={loadWanted}>{loading ? 'Atualizando...' : 'Atualizar lista'}</button>
       </div>
 
+      {searchScheduleError && <div className="error" style={{ marginTop: 12 }}>{searchScheduleError}</div>}
+      {searchError && <div className="error" style={{ marginTop: 12 }}>{searchError}</div>}
+
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {waitingCars.map((w) => (
-          <div key={w.id} className="card">
+          <div key={w.id} className={w.status === 'FOUND' ? 'card card-found' : 'card'}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontWeight: 800 }}>{w.brand} {w.model}</div>
                 <div className="muted">
-                  Condição: {formatCondition(w.condition)} • Ano: {w.yearFrom} a {w.yearTo ?? '—'} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
+                  Condição: {formatCondition(w.condition)} • Ano: {formatYearRange(w.yearFrom, w.yearTo)} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
                 </div>
                 {w.version && <div className="muted">Versao: {w.version}</div>}
+                {w.sellerType && <div className="muted">Anunciante: {formatSellerType(w.sellerType)}</div>}
                 <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
                 {w.clientName && <div style={{ marginTop: 6 }}><strong>Cliente:</strong> {w.clientName}</div>}
                 {w.clientPhone && <div className="muted">{formatPhone(w.clientPhone)}</div>}
                 {w.seller && <div className="muted">Vendedor: {w.seller}</div>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  disabled={loading || searchingWantedId === w.id || !searchSchedule?.enabled || w.status !== 'PENDING'}
+                  onClick={() => searchWantedCar(w.id)}
+                >
+                  {searchingWantedId === w.id
+                    ? 'Buscando...'
+                    : w.status === 'PENDING'
+                      ? `Buscar carro ${searchSchedule?.nextRunAt ? `• ${formatCountdown(searchSchedule.nextRunAt, now)}` : ''}`
+                      : 'Busca encerrada'}
+                </button>
                 <button className="secondary" disabled={loading} onClick={() => openWantedDetails(w.id)}>
-                  Detalhes / buscar
+                  Detalhes
                 </button>
               </div>
             </div>
@@ -803,9 +898,10 @@ export function Home() {
               <div>
                 <div style={{ fontWeight: 800 }}>{w.brand} {w.model}</div>
                 <div className="muted">
-                  Condição: {formatCondition(w.condition)} • Ano: {w.yearFrom} a {w.yearTo ?? '—'} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
+                  Condição: {formatCondition(w.condition)} • Ano: {formatYearRange(w.yearFrom, w.yearTo)} • KM: {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'}
                 </div>
                 {w.version && <div className="muted">Versao: {w.version}</div>}
+                {w.sellerType && <div className="muted">Anunciante: {formatSellerType(w.sellerType)}</div>}
                 <div className="muted">Max: {formatMaxPrice(Number(w.maxPrice))} • Status: {formatStatus(w.status)}</div>
                 {w.clientName && <div style={{ marginTop: 6 }}><strong>Cliente:</strong> {w.clientName}</div>}
                 {w.clientPhone && <div className="muted">{formatPhone(w.clientPhone)}</div>}
@@ -832,18 +928,12 @@ export function Home() {
           carsPageSize={carsPageSize}
           carsLoading={carsLoading}
           carsError={carsError}
-          autoSearchLoading={autoSearchLoadingId === selectedWantedCar.id}
-          autoSearchNotice={autoSearchNotice}
-          autoSearchOlxLoading={autoSearchOlxLoadingId === selectedWantedCar.id}
-          autoSearchOlxNotice={autoSearchOlxNotice}
           statusLoading={statusUpdatingId === selectedWantedCar.id}
           statusError={statusError}
           clientSavingId={clientSavingId}
           clientSaveError={clientSaveError}
           onSaveClient={(patch) => updateWantedDetails(selectedWantedCar.id, patch)}
           onClose={closeWantedDetails}
-          onAutoSearch={() => handleAutoSearch(selectedWantedCar.id)}
-          onAutoSearchOlx={() => handleAutoSearchOlx(selectedWantedCar.id)}
           onMarkBought={() => updateWantedStatus(selectedWantedCar.id, 'BOUGHT')}
           onArchive={() => updateWantedStatus(selectedWantedCar.id, 'ARCHIVED')}
           onPageChange={handleCarsPageChange}

@@ -10,15 +10,9 @@ type WantedCarDetailsModalProps = {
   carsPageSize: number;
   carsLoading: boolean;
   carsError: string | null;
-  autoSearchLoading: boolean;
-  autoSearchNotice: string | null;
-  autoSearchOlxLoading: boolean;
-  autoSearchOlxNotice: string | null;
   statusLoading: boolean;
   statusError: string | null;
   onClose: () => void;
-  onAutoSearch: () => void;
-  onAutoSearchOlx: () => void;
   onMarkBought: () => void;
   onArchive: () => void;
   onPageChange: (page: number) => void;
@@ -36,6 +30,14 @@ function formatRange(minValue: number | null, maxValue: number | null, suffix = 
   return `Até ${maxValue?.toLocaleString('pt-BR')}${suffix}`;
 }
 
+function formatYearRange(yearFrom: number | null, yearTo: number | null): string {
+  if (yearFrom !== null && yearFrom <= 1900) return 'Qualquer Ano';
+  if (yearFrom !== null && yearTo !== null) return `${yearFrom} a ${yearTo}`;
+  if (yearFrom !== null) return `${yearFrom} a —`;
+  if (yearTo !== null) return `— a ${yearTo}`;
+  return 'Qualquer Ano';
+}
+
 function formatMaxPrice(value: number): string {
   if (!Number.isFinite(value) || value >= MAX_PRICE_FALLBACK) return 'Sem limite';
   return `R$ ${value.toLocaleString('pt-BR')}`;
@@ -47,6 +49,17 @@ function formatCondition(condition: WantedCarDTO['condition']): string {
       return 'Novo';
     case 'USED':
       return 'Usado';
+    default:
+      return 'Qualquer';
+  }
+}
+
+function formatSellerType(sellerType: WantedCarDTO['sellerType']): string {
+  switch (sellerType) {
+    case 'PRIVATE':
+      return 'Particular';
+    case 'PROFESSIONAL':
+      return 'Loja / Concessionária';
     default:
       return 'Qualquer';
   }
@@ -67,6 +80,14 @@ function formatStatus(status: WantedCarDTO['status']): string {
   }
 }
 
+function sanitizePhone(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function isValidMobilePhoneDigits(value: string): boolean {
+  return value.length === 11 && value[2] === '9';
+}
+
 export function WantedCarDetailsModal({
   wantedCar,
   cars,
@@ -75,15 +96,9 @@ export function WantedCarDetailsModal({
   carsPageSize,
   carsLoading,
   carsError,
-  autoSearchLoading,
-  autoSearchNotice,
-  autoSearchOlxLoading,
-  autoSearchOlxNotice,
   statusLoading,
   statusError,
   onClose,
-  onAutoSearch,
-  onAutoSearchOlx,
   onMarkBought,
   onArchive,
   onPageChange,
@@ -109,6 +124,7 @@ export function WantedCarDetailsModal({
   const [clientName, setClientName] = useState<string>(wantedCar.clientName ?? '');
   const [clientPhone, setClientPhone] = useState<string>(wantedCar.clientPhone ?? '');
   const [seller, setSeller] = useState<string>(wantedCar.seller ?? '');
+  const [clientPhoneError, setClientPhoneError] = useState<string | null>(null);
 
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [pendingSave, setPendingSave] = useState<boolean>(false);
@@ -118,6 +134,7 @@ export function WantedCarDetailsModal({
     setClientName(wantedCar.clientName ?? '');
     setClientPhone(wantedCar.clientPhone ?? '');
     setSeller(wantedCar.seller ?? '');
+    setClientPhoneError(null);
     // when opening modal, start not editing
     setIsEditing(false);
     setPendingSave(false);
@@ -171,8 +188,9 @@ export function WantedCarDetailsModal({
               <>
                 <div className="modal-section-title">Detalhes cadastrados</div>
                 <div className="detail-row"><span>Condição</span><strong>{formatCondition(wantedCar.condition)}</strong></div>
+                <div className="detail-row"><span>Anunciante</span><strong>{formatSellerType(wantedCar.sellerType)}</strong></div>
                 <div className="detail-row"><span>Versao</span><strong>{wantedCar.version ?? '—'}</strong></div>
-                <div className="detail-row"><span>Ano</span><strong>{formatRange(wantedCar.yearFrom, wantedCar.yearTo)}</strong></div>
+                <div className="detail-row"><span>Ano</span><strong>{formatYearRange(wantedCar.yearFrom, wantedCar.yearTo)}</strong></div>
                 <div className="detail-row"><span>KM</span><strong>{formatRange(wantedCar.mileageFrom, wantedCar.mileageTo, ' km')}</strong></div>
                 <div className="detail-row"><span>Preço máximo</span><strong>{formatMaxPrice(wantedCar.maxPrice)}</strong></div>
                 <div className="detail-row"><span>Status</span><strong>{formatStatus(wantedCar.status)}</strong></div>
@@ -194,7 +212,7 @@ export function WantedCarDetailsModal({
                   <div className="field">
                     <label>Telefone / WhatsApp</label>
                     {isEditing ? (
-                      <input type="text" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} inputMode="numeric" />
+                      <input type="text" value={clientPhone} onChange={(e) => setClientPhone(sanitizePhone(e.target.value))} inputMode="numeric" />
                     ) : (
                       <div>{clientPhone ? formatPhone(clientPhone) : '—'}</div>
                     )}
@@ -210,7 +228,25 @@ export function WantedCarDetailsModal({
                   <div style={{ display: 'flex', gap: 8 }}>
                     {isEditing ? (
                       <>
-                        <button type="button" disabled={clientSavingId === wantedCar.id} onClick={() => { if (onSaveClient) { setPendingSave(true); onSaveClient({ clientName: clientName.trim() || null, clientPhone: clientPhone.trim() || null, seller: seller.trim() || null }); } }}>
+                        <button
+                          type="button"
+                          disabled={clientSavingId === wantedCar.id}
+                          onClick={() => {
+                            if (clientPhone && !isValidMobilePhoneDigits(clientPhone)) {
+                              setClientPhoneError('Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.');
+                              return;
+                            }
+                            setClientPhoneError(null);
+                            if (onSaveClient) {
+                              setPendingSave(true);
+                              onSaveClient({
+                                clientName: clientName.trim() || null,
+                                clientPhone: clientPhone.trim() || null,
+                                seller: seller.trim() || null
+                              });
+                            }
+                          }}
+                        >
                           {clientSavingId === wantedCar.id ? 'Salvando...' : 'Salvar'}
                         </button>
                         <button type="button" className="secondary" onClick={() => { setClientName(wantedCar.clientName ?? ''); setClientPhone(wantedCar.clientPhone ?? ''); setSeller(wantedCar.seller ?? ''); setIsEditing(false); }}>
@@ -223,6 +259,7 @@ export function WantedCarDetailsModal({
                       </button>
                     )}
                   </div>
+                  {clientPhoneError && <div className="error" style={{ marginTop: 8 }}>{clientPhoneError}</div>}
                   {clientSaveError && <div className="error" style={{ marginTop: 8 }}>{clientSaveError}</div>}
                 </div>
               </>
@@ -239,18 +276,9 @@ export function WantedCarDetailsModal({
               <>
                 <div>
                   <div className="modal-section-title">Ações</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button type="button" disabled={autoSearchLoading} onClick={onAutoSearch}>
-                      {autoSearchLoading ? 'Buscando...' : 'Buscar anuncios automaticamente'}
-                    </button>
-                    <button type="button" disabled={autoSearchOlxLoading} onClick={onAutoSearchOlx}>
-                      {autoSearchOlxLoading ? 'Buscando OLX...' : 'Buscar automaticamente (OLX)'}
-                    </button>
+                  <div className="muted">
+                    As buscas sao automaticas pelo cronjob. Quando o carro sai de PENDING, ele para de ser procurado.
                   </div>
-                  <div className="muted">A busca Webmotors consome creditos da Apify e pode levar alguns segundos.</div>
-                  {autoSearchNotice && <div className="muted">{autoSearchNotice}</div>}
-                  <div className="muted">A busca OLX usa proxy residencial e pode levar alguns segundos.</div>
-                  {autoSearchOlxNotice && <div className="muted">{autoSearchOlxNotice}</div>}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button type="button" disabled={statusLoading} onClick={onMarkBought}>

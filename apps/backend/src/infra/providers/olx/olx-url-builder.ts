@@ -11,11 +11,22 @@ const PARAM_KEYS = {
   priceMax: 'pe',
   yearMin: 'rs',
   yearMax: 're',
-  kmMin: 'kmf',
-  kmMax: 'kmt',
+  kmMin: 'mi',
+  kmMax: 'me',
   condition: 'sf',
+  sellerType: 'f',
+  cnwa: 'cnwa',
   page: 'o'
 };
+
+const ANY_YEAR_MIN = 1900;
+
+function shouldIncludeYearFilters(yearMin: number | null, yearMax: number | null): boolean {
+  if (yearMin === null && yearMax === null) return false;
+  if (yearMin === null || yearMax === null) return true;
+  const expectedMax = new Date().getFullYear() + 1;
+  return !(yearMin <= ANY_YEAR_MIN && yearMax >= expectedMax);
+}
 
 function normalizeState(value: string | null): string {
   if (!value) return DEFAULT_STATE;
@@ -33,6 +44,12 @@ function toPositiveInteger(value: number | null): number | null {
 function resolveConditionParam(condition: OlxSearchFilters['condition']): string | null {
   if (condition === 'NEW') return 'novo';
   if (condition === 'USED') return 'usado';
+  return null;
+}
+
+function resolveSellerTypeParam(sellerType: OlxSearchFilters['sellerType']): string | null {
+  if (sellerType === 'PRIVATE') return 'p';
+  if (sellerType === 'PROFESSIONAL') return 'c';
   return null;
 }
 
@@ -67,13 +84,20 @@ export function buildOlxSearchUrl(filters: OlxSearchFilters, page: number): stri
 
   if (priceMin !== null) url.searchParams.set(PARAM_KEYS.priceMin, String(priceMin));
   if (priceMax !== null) url.searchParams.set(PARAM_KEYS.priceMax, String(priceMax));
-  if (yearMin !== null) url.searchParams.set(PARAM_KEYS.yearMin, String(yearMin));
-  if (yearMax !== null) url.searchParams.set(PARAM_KEYS.yearMax, String(yearMax));
+  if (shouldIncludeYearFilters(yearMin, yearMax)) {
+    if (yearMin !== null) url.searchParams.set(PARAM_KEYS.yearMin, String(yearMin));
+    if (yearMax !== null) url.searchParams.set(PARAM_KEYS.yearMax, String(yearMax));
+  }
   if (kmMin !== null) url.searchParams.set(PARAM_KEYS.kmMin, String(kmMin));
   if (kmMax !== null) url.searchParams.set(PARAM_KEYS.kmMax, String(kmMax));
 
   const condition = resolveConditionParam(filters.condition);
   if (condition) url.searchParams.set(PARAM_KEYS.condition, condition);
+
+  const sellerType = resolveSellerTypeParam(filters.sellerType);
+  if (sellerType) url.searchParams.set(PARAM_KEYS.sellerType, sellerType);
+
+  url.searchParams.set(PARAM_KEYS.cnwa, '1');
 
   const safePage = Math.max(1, Math.trunc(page));
   if (safePage > 1) url.searchParams.set(PARAM_KEYS.page, String(safePage));

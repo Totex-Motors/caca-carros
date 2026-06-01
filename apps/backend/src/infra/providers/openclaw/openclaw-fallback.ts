@@ -23,8 +23,10 @@ export class OpenClawFallback {
   constructor(private readonly adapter: OpenClawAdapter = new OpenClawDisabledAdapter()) {}
 
   isEnabled(): boolean {
-    const flag = process.env.OPENCLAW_ENABLED ?? 'false';
-    if (flag.toLowerCase() !== 'true') return false;
+    const flag = process.env.OPENCLAW_ENABLED;
+    if (flag !== undefined) {
+      return flag.toLowerCase() === 'true' && this.adapter.isEnabled();
+    }
     return this.adapter.isEnabled();
   }
 

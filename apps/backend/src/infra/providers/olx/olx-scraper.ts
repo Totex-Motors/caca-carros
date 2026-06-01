@@ -1,4 +1,4 @@
-import type { Page, Request, Route } from 'playwright';
+import type { BrowserContext, Page, Request, Route } from 'playwright';
 import { OlxBrowserFactory } from './olx-browser-factory';
 import { buildOlxSearchUrl } from './olx-url-builder';
 import type { OlxCardData, OlxDetailData, OlxListing, OlxScrapeDebug, OlxScrapeOptions, OlxScrapeResult, OlxSearchFilters } from './olx-types';
@@ -7,6 +7,8 @@ import { createOpenClawFallback } from '../openclaw/openclaw-factory';
 import type { OpenClawField, OpenClawHint } from '../openclaw/openclaw-types';
 
 const NAV_TIMEOUT_MS = Number(process.env.OLX_NAV_TIMEOUT_MS ?? 45000);
+const SEARCH_TIMEOUT_MS = Number(process.env.OLX_SEARCH_TIMEOUT_MS ?? 90000);
+const MAX_DETAIL_FAILURES = Number(process.env.OLX_MAX_DETAIL_FAILURES ?? 10);
 const BLOCKED_RESOURCE_TYPES = new Set(['image', 'media', 'font']);
 const BLOCKED_URL_SNIPPETS = [
   'doubleclick',
@@ -17,7 +19,6 @@ const BLOCKED_URL_SNIPPETS = [
   'hotjar',
   'facebook',
   'pixel',
-  'ads',
   'adservice',
   'criteo',
   'taboola'
@@ -39,6 +40,14 @@ const DETAIL_WAIT_SELECTORS = [
 ];
 
 const DEFAULT_MAX_PAGES = 5;
+const BLOCKED_MARKERS = ['sorry, you have been blocked', 'access denied', 'voce foi bloqueado', 'acesso negado'];
+
+class OlxBlockedError extends Error {
+  constructor(message = 'OLX blocked') {
+    super(message);
+    this.name = 'OlxBlockedError';
+  }
+}
 
 function isOlxDebugEnabled(): boolean {
   const flag = process.env.OLX_DEBUG_ERRORS ?? 'false';
@@ -51,6 +60,12 @@ function randomInt(min: number, max: number): number {
 
 async function randomDelay(page: Page, minMs: number, maxMs: number): Promise<void> {
   await page.waitForTimeout(randomInt(minMs, maxMs));
+}
+
+function buildRotatingSessionId(base?: string, tag?: string): string | undefined {
+  if (!base) return undefined;
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return [base, tag, suffix].filter(Boolean).join('-');
 }
 
 async function waitForAnySelector(page: Page, selectors: string[], timeoutMs: number): Promise<string | null> {
@@ -78,6 +93,29 @@ function normalizeText(value: string | null | undefined): string | null {
   const trimmed = trimToNull(value);
   if (!trimmed) return null;
   return trimmed.replace(/\s+/g, ' ');
+}
+
+function normalizeComparable(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function normalizePositiveInt(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.trunc(value);
+}
+
+function normalizeNonNegativeInt(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return Math.trunc(value);
+}
+
+function isBlockedText(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const normalized = normalizeComparable(value);
+  return BLOCKED_MARKERS.some((marker) => normalized.includes(marker));
 }
 
 function readString(value: unknown): string | null {
@@ -212,6 +250,16 @@ async function setupRequestInterception(page: Page): Promise<void> {
   });
 }
 
+async function createPageWithProxy(
+  browserFactory: OlxBrowserFactory,
+  sessionId?: string
+): Promise<{ context: BrowserContext; page: Page }> {
+  const { context } = await browserFactory.createContext(sessionId);
+  const page = await context.newPage();
+  await setupRequestInterception(page);
+  return { context, page };
+}
+
 async function humanScroll(page: Page): Promise<void> {
   const steps = randomInt(4, 8);
   for (let i = 0; i < steps; i += 1) {
@@ -227,6 +275,34 @@ function normalizeUrl(url: string, baseUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+function stripQueryAndHash(value: string): string {
+  const hashIndex = value.indexOf('#');
+  const queryIndex = value.indexOf('?');
+  let end = value.length;
+
+  if (hashIndex >= 0) end = Math.min(end, hashIndex);
+  if (queryIndex >= 0) end = Math.min(end, queryIndex);
+
+  return value.slice(0, end);
+}
+
+function isLikelyListingUrl(value: string): boolean {
+  if (!value) return false;
+  const cleaned = stripQueryAndHash(value.trim().toLowerCase()).replace(/\/+$/g, '');
+  if (!cleaned) return false;
+
+  const isOlxLink = cleaned.startsWith('/') || cleaned.includes('olx.com.br');
+  if (!isOlxLink) return false;
+
+  if (/\/item\/\d{6,}$/.test(cleaned)) return true;
+  if (/\/d\/oferta\/.+-\d{6,}$/.test(cleaned)) return true;
+  if (/\/d\/.+-\d{6,}$/.test(cleaned)) return true;
+  if (/-\d{6,}$/.test(cleaned)) return true;
+  if (/\/\d{6,}$/.test(cleaned)) return true;
+
+  return false;
 }
 
 function readNumber(value: string | null | undefined): number | null {
@@ -353,6 +429,7 @@ function normalizeListing(raw: Partial<OlxListing>, baseUrl: string): OlxListing
   const url = raw.url ? normalizeUrl(raw.url, baseUrl) : null;
   const title = raw.title?.trim() ?? '';
   if (!url || !title) return null;
+  if (!isLikelyListingUrl(url)) return null;
 
   const locationParts = normalizeLocation(raw.location ?? null);
   const city = raw.city ?? locationParts.city ?? null;
@@ -442,6 +519,50 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
   return page.$$eval('a', (anchors: Element[]) => {
     const results: RawCard[] = [];
 
+    function looksLikeDetailUrl(value: string): boolean {
+      const cleaned = value.split('#')[0].split('?')[0].replace(/\/+$/g, '');
+      if (!cleaned) return false;
+      const lower = cleaned.toLowerCase();
+
+      if (lower.includes('/item/') && /\d{6,}/.test(lower)) return true;
+      if (lower.includes('/d/') && /\d{6,}/.test(lower)) return true;
+      if (/-\d{6,}$/.test(lower)) return true;
+      if (/\/\d{6,}$/.test(lower)) return true;
+
+      return false;
+    }
+
+    function extractUrlFromData(value: string | null): string | null {
+      if (!value) return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+
+      try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown> | null;
+        if (parsed && typeof parsed === 'object') {
+          const direct = parsed.url ?? parsed.href ?? (parsed.data as { url?: unknown } | undefined)?.url;
+          if (typeof direct === 'string') return direct;
+        }
+      } catch {
+        // ignore JSON parse errors
+      }
+
+      const match = trimmed.match(/https?:\/\/[^"'\s]+/i);
+      return match ? match[0] : null;
+    }
+
+    function resolveListingUrl(anchor: Element, href: string): string | null {
+      if (looksLikeDetailUrl(href)) return href;
+
+      const dataHref = anchor.getAttribute('data-href');
+      if (dataHref && looksLikeDetailUrl(dataHref)) return dataHref;
+
+      const dataLurker = extractUrlFromData(anchor.getAttribute('data-lurker-detail'));
+      if (dataLurker && looksLikeDetailUrl(dataLurker)) return dataLurker;
+
+      return null;
+    }
+
     function isListingLink(anchor: Element, href: string): boolean {
       const value = href.trim();
       if (!value) return false;
@@ -450,9 +571,7 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
 
       const isOlxLink = lower.includes('olx.com.br') || lower.startsWith('/');
       if (!isOlxLink) return false;
-
-      if (lower.includes('/item/') || lower.includes('/d/')) return true;
-      if (lower.includes('/autos-e-pecas/') || lower.includes('/carros-vans-e-utilitarios/')) return true;
+      if (!looksLikeDetailUrl(lower)) return false;
 
       const testId = anchor.getAttribute('data-testid') || '';
       if (testId.toLowerCase().includes('ad')) return true;
@@ -463,8 +582,7 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
       const parentTestId = anchor.closest('[data-testid]')?.getAttribute('data-testid') || '';
       if (parentTestId.toLowerCase().includes('ad')) return true;
 
-      const hasNumericId = /\d{6,}/.test(lower);
-      return hasNumericId && lower.includes('olx.com.br');
+      return true;
     }
 
     function findMetaText(values: string[], pattern: RegExp): string | null {
@@ -480,18 +598,46 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
       return null;
     }
 
+    function extractImageUrl(root: Element): string | null {
+      const img = root.querySelector('img');
+      const direct = img?.getAttribute('src') || img?.getAttribute('data-src') || img?.getAttribute('data-lazy') || img?.getAttribute('data-original');
+      if (direct) return direct;
+
+      const srcset = img?.getAttribute('srcset') || img?.getAttribute('data-srcset');
+      if (srcset) {
+        const first = srcset.split(',')[0]?.trim().split(' ')[0];
+        if (first) return first;
+      }
+
+      const pictureSource = root.querySelector('source');
+      const sourceSet = pictureSource?.getAttribute('srcset');
+      if (sourceSet) {
+        const first = sourceSet.split(',')[0]?.trim().split(' ')[0];
+        if (first) return first;
+      }
+
+      const style = (root as HTMLElement).style?.backgroundImage || root.getAttribute('style') || '';
+      const match = style.match(/url\(['"]?([^'")]+)['"]?\)/i);
+      return match ? match[1] : null;
+    }
+
     for (const anchor of anchors) {
       const href = anchor.getAttribute('href') || '';
       if (!href) continue;
-      if (!isListingLink(anchor, href)) continue;
+      const resolvedUrl = resolveListingUrl(anchor, href);
+      if (!resolvedUrl) continue;
+      if (!isListingLink(anchor, resolvedUrl)) continue;
 
-      const titleEl = anchor.querySelector('h2, h3, [data-testid*="title"], [data-testid*="ad-title"]');
-      const priceEl = anchor.querySelector('[data-testid*="price"], [class*="price"]');
-      const locationEl = anchor.querySelector('[data-testid*="location"], [class*="location"]');
-      const dateEl = anchor.querySelector('time, [data-testid*="date"], [class*="date"]');
-      const imageEl = anchor.querySelector('img');
+      const cardRoot =
+        anchor.closest('[data-testid*="ad"], [data-testid*="listing"], [data-testid*="item"], li, article') ?? anchor;
 
-      const metaTexts = Array.from(anchor.querySelectorAll('span, li, div'))
+      const titleEl = cardRoot.querySelector('h2, h3, [data-testid*="title"], [data-testid*="ad-title"]');
+      const priceEl = cardRoot.querySelector('[data-testid*="price"], [class*="price"]');
+      const locationEl = cardRoot.querySelector('[data-testid*="location"], [class*="location"]');
+      const dateEl = cardRoot.querySelector('time, [data-testid*="date"], [class*="date"]');
+      const imageUrl = extractImageUrl(cardRoot);
+
+      const metaTexts = Array.from(cardRoot.querySelectorAll('span, li, div'))
         .map((el) => el.textContent?.trim() || '')
         .filter((text) => text.length > 0);
 
@@ -502,16 +648,15 @@ async function extractListingsFromCards(page: Page): Promise<RawCard[]> {
       const kmText = findMetaText(metaTexts, /\bkm\b/i) || '';
       const yearText = findMetaText(metaTexts, /\b(19|20)\d{2}\b/) || '';
       const fuelText = findMetaText(metaTexts, /(flex|gasolina|diesel|hibrid|eletr)/i) || '';
-      const imageUrl = imageEl?.getAttribute('src') || imageEl?.getAttribute('data-src') || null;
 
       const normalizedLocation =
         locationText ||
-        findBySelectors(anchor, ['[data-testid*="location"]', '[class*="location"]']);
+        findBySelectors(cardRoot, ['[data-testid*="location"]', '[class*="location"]']);
 
       if (!title) continue;
 
       results.push({
-        url: href,
+        url: resolvedUrl,
         title,
         priceText: priceText || null,
         locationText: normalizedLocation || null,
@@ -630,8 +775,30 @@ async function extractDetailsFromDom(page: Page): Promise<OlxDetailData> {
     const locationText = firstText(['[data-testid*="location"]', '[class*="location"]']);
     const dateText = firstText(['time', '[data-testid*="date"]', '[class*="date"]']);
 
+    function readFirstSrcset(value: string | null): string | null {
+      if (!value) return null;
+      const first = value.split(',')[0]?.trim().split(' ')[0];
+      return first && first.length > 0 ? first : null;
+    }
+
     const photos = Array.from(document.querySelectorAll('img'))
-      .map((img) => img.getAttribute('src') || img.getAttribute('data-src') || '')
+      .flatMap((img) => {
+        const candidates: string[] = [];
+        const direct =
+          img.getAttribute('src') ||
+          img.getAttribute('data-src') ||
+          img.getAttribute('data-lazy') ||
+          img.getAttribute('data-original') ||
+          '';
+        if (direct) candidates.push(direct);
+
+        const srcset = readFirstSrcset(img.getAttribute('srcset'));
+        const dataSrcset = readFirstSrcset(img.getAttribute('data-srcset'));
+        if (srcset) candidates.push(srcset);
+        if (dataSrcset) candidates.push(dataSrcset);
+
+        return candidates;
+      })
       .filter((src) => src.length > 0 && src.startsWith('http'));
 
     const detailRows = Array.from(document.querySelectorAll('li, [data-testid*="property"], [data-testid*="spec"]'));
@@ -719,6 +886,10 @@ function normalizeDetailListing(detail: OlxDetailData, baseUrl: string): Partial
   };
 }
 
+function isBlockedDetail(detail: OlxDetailData, pageTitle: string | null): boolean {
+  return isBlockedText(detail.titleText) || isBlockedText(pageTitle) || isBlockedText(detail.descriptionText);
+}
+
 function mergeListing(base: OlxListing, detail: Partial<OlxListing> | null): OlxListing {
   if (!detail) return base;
 
@@ -740,6 +911,12 @@ function mergeListing(base: OlxListing, detail: Partial<OlxListing> | null): Olx
   };
 }
 
+function shouldFetchDetail(listing: OlxListing): boolean {
+  if (listing.price === null) return true;
+  if (listing.year === null) return true;
+  return false;
+}
+
 async function extractDetailListing(page: Page, url: string, openClaw: OpenClawFallback): Promise<Partial<OlxListing> | null> {
   await randomDelay(page, 300, 800);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: Number.isFinite(NAV_TIMEOUT_MS) ? NAV_TIMEOUT_MS : 45000 });
@@ -753,6 +930,10 @@ async function extractDetailListing(page: Page, url: string, openClaw: OpenClawF
   );
   const ldDetails = extractDetailsFromLdJson(ldJson, baseUrl);
   const domDetails = await extractDetailsFromDom(page);
+  const pageTitle = await page.title().catch(() => null);
+  if (isBlockedDetail(domDetails, pageTitle)) {
+    throw new OlxBlockedError();
+  }
   const normalizedDom = normalizeDetailListing(domDetails, baseUrl);
 
   const baseDetails: Partial<OlxListing> = {
@@ -796,6 +977,7 @@ async function runWithRetries<T>(fn: () => Promise<T>, attempts: number): Promis
       return await fn();
     } catch (error) {
       lastError = error;
+      if (error instanceof OlxBlockedError) break;
     }
   }
 
@@ -811,36 +993,88 @@ export class OlxScraper {
   async search(filters: OlxSearchFilters, options: OlxScrapeOptions): Promise<OlxScrapeResult> {
     const rawMaxPages = Number.isFinite(options.maxPages) ? Math.trunc(options.maxPages) : 0;
     const maxPages = rawMaxPages > 0 ? rawMaxPages : DEFAULT_MAX_PAGES;
+    const searchTimeoutMs = normalizePositiveInt(SEARCH_TIMEOUT_MS, 90000);
+    const maxDetailFailures = normalizeNonNegativeInt(MAX_DETAIL_FAILURES, 10);
+    const startedAt = Date.now();
+    const deadlineAt = startedAt + searchTimeoutMs;
+    const isTimedOut = () => Date.now() >= deadlineAt;
     const debug: OlxScrapeDebug | null = isOlxDebugEnabled()
       ? { pages: [], collected: 0, detailAttempts: 0, detailErrors: 0 }
       : null;
 
-    const { context } = await this.browserFactory.createContext(options.sessionId);
-    const page = await context.newPage();
-    const detailPage = await context.newPage();
-    await setupRequestInterception(page);
-    await setupRequestInterception(detailPage);
+    let listContext: BrowserContext | null = null;
+    let listPage: Page | null = null;
+    let detailContext: BrowserContext | null = null;
+    let detailPage: Page | null = null;
+
+    const closeListContext = async () => {
+      if (listPage) {
+        await listPage.close().catch(() => undefined);
+        listPage = null;
+      }
+      if (listContext) {
+        await listContext.close().catch(() => undefined);
+        listContext = null;
+      }
+    };
+
+    const closeDetailContext = async () => {
+      if (detailPage) {
+        await detailPage.close().catch(() => undefined);
+        detailPage = null;
+      }
+      if (detailContext) {
+        await detailContext.close().catch(() => undefined);
+        detailContext = null;
+      }
+    };
+
+    const ensureDetailPage = async () => {
+      if (detailPage && detailContext) return;
+      const sessionId = buildRotatingSessionId(options.sessionId, 'detail');
+      const bundle = await createPageWithProxy(this.browserFactory, sessionId);
+      detailContext = bundle.context;
+      detailPage = bundle.page;
+    };
+
+    const rotateDetailContext = async () => {
+      await closeDetailContext();
+      await ensureDetailPage();
+    };
 
     const collected: OlxListing[] = [];
     const seen = new Set<string>();
-
     try {
+      const listSessionId = buildRotatingSessionId(options.sessionId, 'list');
+      const listBundle = await createPageWithProxy(this.browserFactory, listSessionId);
+      listContext = listBundle.context;
+      listPage = listBundle.page;
+      if (!listPage) {
+        throw new Error('OLX list page not initialized');
+      }
+
+      const activeListPage = listPage;
+
       for (let pageIndex = 1; pageIndex <= maxPages; pageIndex += 1) {
+        if (isTimedOut()) {
+          console.warn('[olx.scraper] search timeout reached while listing', { elapsedMs: Date.now() - startedAt });
+          break;
+        }
         const url = buildOlxSearchUrl(filters, pageIndex);
         console.info('[olx.scraper] search page', { page: pageIndex, url });
-        await randomDelay(page, 300, 800);
+        await randomDelay(activeListPage, 300, 800);
         await runWithRetries(
-          () => page.goto(url, { waitUntil: 'domcontentloaded', timeout: Number.isFinite(NAV_TIMEOUT_MS) ? NAV_TIMEOUT_MS : 45000 }),
+          () => activeListPage.goto(url, { waitUntil: 'domcontentloaded', timeout: Number.isFinite(NAV_TIMEOUT_MS) ? NAV_TIMEOUT_MS : 45000 }),
           Math.max(1, options.retryAttempts)
         );
 
-        await waitForAnySelector(page, LIST_WAIT_SELECTORS, NAV_TIMEOUT_MS);
+        await waitForAnySelector(activeListPage, LIST_WAIT_SELECTORS, NAV_TIMEOUT_MS);
 
-        await randomDelay(page, 300, 800);
-        await humanScroll(page);
+        await randomDelay(activeListPage, 300, 800);
+        await humanScroll(activeListPage);
 
-        const baseUrl = page.url();
-        const ldJson = await page.$$eval('script[type="application/ld+json"]', (nodes: Element[]) =>
+        const baseUrl = activeListPage.url();
+        const ldJson = await activeListPage.$$eval('script[type="application/ld+json"]', (nodes: Element[]) =>
           nodes.map((node) => node.textContent || '')
         );
 
@@ -861,7 +1095,7 @@ export class OlxScraper {
           break;
         }
 
-        const cardListings = await extractListingsFromCards(page);
+        const cardListings = await extractListingsFromCards(activeListPage);
         pageListingsCount += cardListings.length;
         for (const card of cardListings) {
           const normalized = normalizeCardListing(card, baseUrl);
@@ -886,18 +1120,56 @@ export class OlxScraper {
         if (pageListingsCount === 0) break;
       }
 
+      await closeListContext();
+
       const enriched: OlxListing[] = [];
+      let detailFailures = 0;
+      let skipRemainingDetails = maxDetailFailures === 0;
+
       for (const listing of collected) {
-        if (debug) debug.detailAttempts += 1;
+        if (isTimedOut()) {
+          if (!skipRemainingDetails) {
+            console.warn('[olx.scraper] search timeout reached during details', { elapsedMs: Date.now() - startedAt });
+          }
+          skipRemainingDetails = true;
+        }
+
         let detail: Partial<OlxListing> | null = null;
-        try {
-          detail = await runWithRetries(
-            () => extractDetailListing(detailPage, listing.url, this.openClawFallback),
-            Math.max(1, options.retryAttempts)
-          );
-        } catch {
-          if (debug) debug.detailErrors += 1;
-          detail = null;
+
+        if (!skipRemainingDetails && maxDetailFailures > 0 && detailFailures >= maxDetailFailures) {
+          skipRemainingDetails = true;
+        }
+
+        if (!skipRemainingDetails && shouldFetchDetail(listing)) {
+          if (debug) debug.detailAttempts += 1;
+          try {
+            await ensureDetailPage();
+            if (detailPage) {
+              detail = await runWithRetries(
+                () => extractDetailListing(detailPage as Page, listing.url, this.openClawFallback),
+                Math.max(1, options.retryAttempts)
+              );
+            }
+          } catch (error) {
+            if (error instanceof OlxBlockedError) {
+              if (debug) debug.detailErrors += 1;
+              detailFailures += 1;
+              console.warn('[olx.scraper] detail blocked, rotating proxy');
+              await rotateDetailContext();
+            } else {
+              if (debug) debug.detailErrors += 1;
+              detailFailures += 1;
+              detail = null;
+            }
+
+            if (!skipRemainingDetails && maxDetailFailures > 0 && detailFailures >= maxDetailFailures) {
+              skipRemainingDetails = true;
+              console.warn('[olx.scraper] detail failure limit reached, skipping remaining details', {
+                failures: detailFailures,
+                max: maxDetailFailures
+              });
+            }
+          }
         }
 
         const merged = mergeListing(listing, detail);
@@ -912,9 +1184,8 @@ export class OlxScraper {
 
       return { listings: enriched, debug: debug ?? undefined };
     } finally {
-      await page.close().catch(() => undefined);
-      await detailPage.close().catch(() => undefined);
-      await context.close().catch(() => undefined);
+      await closeListContext();
+      await closeDetailContext();
     }
   }
 }

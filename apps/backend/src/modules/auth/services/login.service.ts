@@ -13,12 +13,13 @@ export class LoginService {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET is required');
 
-    const expiresIn = (process.env.JWT_EXPIRES_IN ?? '8h') as SignOptions['expiresIn'];
-
+    const expiresInEnv = process.env.JWT_EXPIRES_IN?.trim();
     const options: SignOptions = {
-      subject: user.id,
-      expiresIn
+      subject: user.id
     };
+    if (expiresInEnv) {
+      options.expiresIn = expiresInEnv as SignOptions['expiresIn'];
+    }
 
     const token = jwt.sign({ email: user.email }, secret, options);
 
