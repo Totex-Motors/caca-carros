@@ -13,34 +13,34 @@ type LocationInfo = {
 };
 
 const DEFAULT_STATE_CODE = 'sp';
-const DEFAULT_LOCATION = 'S\u00e3o Paulo';
+const DEFAULT_LOCATION = 'São Paulo';
 
 const STATE_NAME_BY_CODE: Record<string, string> = {
   ac: 'Acre',
   al: 'Alagoas',
-  ap: 'Amap\u00e1',
+  ap: 'Amapá',
   am: 'Amazonas',
   ba: 'Bahia',
-  ce: 'Cear\u00e1',
+  ce: 'Ceará',
   df: 'Distrito Federal',
-  es: 'Esp\u00edrito Santo',
-  go: 'Goi\u00e1s',
-  ma: 'Maranh\u00e3o',
+  es: 'Espírito Santo',
+  go: 'Goiás',
+  ma: 'Maranhão',
   mt: 'Mato Grosso',
   ms: 'Mato Grosso do Sul',
   mg: 'Minas Gerais',
-  pa: 'Par\u00e1',
-  pb: 'Para\u00edba',
-  pr: 'Paran\u00e1',
+  pa: 'Pará',
+  pb: 'Paraíba',
+  pr: 'Paraná',
   pe: 'Pernambuco',
-  pi: 'Piau\u00ed',
+  pi: 'Piauí',
   rj: 'Rio de Janeiro',
   rn: 'Rio Grande do Norte',
   rs: 'Rio Grande do Sul',
-  ro: 'Rond\u00f4nia',
+  ro: 'Rondônia',
   rr: 'Roraima',
   sc: 'Santa Catarina',
-  sp: 'S\u00e3o Paulo',
+  sp: 'São Paulo',
   se: 'Sergipe',
   to: 'Tocantins'
 };
@@ -87,6 +87,12 @@ function resolveVehicleType(condition: SearchCarParams['condition']): VehicleSea
   return { segment: 'carros', lkid: '1705', tipoveiculo: 'carros' };
 }
 
+function resolveSellerType(sellerType: SearchCarParams['sellerType']): string | null {
+  if (sellerType === 'PRIVATE') return 'Pessoa Física';
+  if (sellerType === 'PROFESSIONAL') return 'Concessionária|Loja';
+  return null;
+}
+
 function normalizeBrand(brand: string): { slug: string; param: string; display: string } {
   const display = brand.trim();
   const slug = slugify(display);
@@ -129,6 +135,9 @@ export function buildWebmotorsSearchUrl(params: SearchCarParams): string {
 
   if (brand.param) url.searchParams.set('marca1', brand.param);
   if (modelParam) url.searchParams.set('modelo1', modelParam);
+
+  const sellerType = resolveSellerType(params.sellerType);
+  if (sellerType) url.searchParams.set('anunciante', sellerType);
 
   const yearTo = params.yearTo ?? params.yearFrom;
   if (params.yearFrom) url.searchParams.set('anode', String(params.yearFrom));

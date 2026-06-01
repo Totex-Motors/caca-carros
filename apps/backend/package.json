@@ -20,10 +20,12 @@
     "@prisma/client": "^6.16.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
+    "cron-parser": "^4.9.0",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "playwright": "^1.60.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

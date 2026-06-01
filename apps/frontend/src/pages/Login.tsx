@@ -48,9 +48,6 @@ export function Login() {
           <div style={{ marginTop: 16 }}>
             <button disabled={loading} type="submit">{loading ? 'Entrando...' : 'Entrar'}</button>
           </div>
-          <div className="muted" style={{ marginTop: 10 }}>
-            Use o usuário criado no seed (ADMIN_EMAIL/ADMIN_PASSWORD).
-          </div>
         </form>
       </div>
     </div>

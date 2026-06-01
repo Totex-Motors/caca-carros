@@ -1,8 +1,12 @@
 import type { Request, Response } from 'express';
 import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prisma/client';
 import { prisma } from '../../../infra/database/prisma/client';
+import { getCarSearchSchedule } from '../../../infra/jobs/car-search.job';
+import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
 import { SearchCarService } from '../../../core/cars/services/search-car.service';
+import { SearchMercadoLivreService } from '../../../core/cars/services/search-mercadolivre.service';
+import { SearchOlxService } from '../../../core/cars/services/search-olx.service';
 import { parseVehicleModelAndVersion } from '../../../core/cars/utils/vehicle-model-parser';
 
 type CarDTO = {
@@ -26,6 +30,7 @@ type WantedCarDTO = {
   clientName?: string | null;
   clientPhone?: string | null;
   seller?: string | null;
+  sellerType?: SellerType | null;
   condition: WantedCarCondition | null;
   yearFrom: number;
   yearTo: number | null;
@@ -42,6 +47,65 @@ type ManualSearchBody = {
   city?: unknown;
   state?: unknown;
 };
+
+type SellerType = 'PRIVATE' | 'PROFESSIONAL';
+
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/\/\/[^@\s]+@/g, '//***@')
+    .replace(/\b[^\s:@]+:[^\s@]+@/g, '***:***@')
+    .trim();
+}
+
+function toSafeErrorDetails(error: unknown): string | null {
+  if (!error) return null;
+  if (error instanceof Error) {
+    return sanitizeErrorMessage(error.message);
+  }
+  if (typeof error === 'string') {
+    return sanitizeErrorMessage(error);
+  }
+  try {
+    return sanitizeErrorMessage(JSON.stringify(error));
+  } catch {
+    return null;
+  }
+}
+
+function isOlxDebugEnabled(): boolean {
+  const flag = process.env.OLX_DEBUG_ERRORS ?? 'false';
+  return flag.toLowerCase() === 'true';
+}
+
+function isExternalSearchEnabled(): boolean {
+  const flag = process.env.EXTERNAL_SEARCH_ENABLED ?? 'false';
+  return flag.toLowerCase() === 'true';
+}
+
+function canSearchWanted(wanted: WantedCar): boolean {
+  return wanted.status === 'PENDING';
+}
+
+async function persistSearchResults(wanted: WantedCar, results: ExternalCar[]): Promise<number> {
+  const uniqueResults = Array.from(new Map(results.map((car) => [car.url, car])).values());
+
+  if (uniqueResults.length === 0) {
+    return 0;
+  }
+
+  const savedCount = await prisma.$transaction(async (tx) => {
+    const created = await tx.car.createMany({
+      data: uniqueResults.map((car) => mapExternalCarToCreateInput(car, wanted)),
+      skipDuplicates: true
+    });
+
+    await tx.wantedCar.update({ where: { id: wanted.id }, data: { status: 'FOUND' } });
+
+    return created.count;
+  });
+
+  return savedCount;
+}
 
 function mapCarToDto(car: Car): CarDTO {
   const rawPhotos = Array.isArray(car.photos) ? car.photos : [];
@@ -74,6 +138,7 @@ function mapWantedToDto(wanted: WantedCar & { cars?: Car[] }): WantedCarDTO {
     clientName: (wanted as any).clientName ?? null,
     clientPhone: (wanted as any).clientPhone ?? null,
     seller: (wanted as any).seller ?? null,
+    sellerType: (wanted as { sellerType?: SellerType | null }).sellerType ?? null,
     condition: wanted.condition ?? null,
     yearFrom: wanted.yearFrom,
     yearTo: wanted.yearTo,
@@ -93,15 +158,29 @@ function parseOptionalInt(value: unknown): number | null {
   return parsed;
 }
 
+function sanitizePhone(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function isValidMobilePhoneDigits(value: string): boolean {
+  if (value.length !== 11) return false;
+  return value[2] === '9';
+}
+
 export class SearchCarController {
-  constructor(private readonly searchService = new SearchCarService()) {}
+  constructor(
+    private readonly searchService = new SearchCarService(),
+    private readonly searchMercadoLivreService = new SearchMercadoLivreService(),
+    private readonly searchOlxService = new SearchOlxService()
+  ) {}
 
   async createWanted(req: Request, res: Response): Promise<Response> {
-    const { brand, model, version, condition, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo, clientName, clientPhone, seller } = req.body as {
+    const { brand, model, version, condition, sellerType, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo, clientName, clientPhone, seller } = req.body as {
       brand?: unknown;
       model?: unknown;
       version?: unknown;
       condition?: unknown;
+      sellerType?: unknown;
       year?: unknown;
       yearFrom?: unknown;
       yearTo?: unknown;
@@ -136,12 +215,13 @@ export class SearchCarController {
       : Number(resolvedYearToRaw);
 
     const currentYear = new Date().getFullYear();
+    const defaultYearTo = currentYear + 1;
     let resolvedYearFrom = yearFromNumber;
     let resolvedYearTo = yearToNumber;
 
     if (resolvedYearFrom === null && resolvedYearTo === null) {
       resolvedYearFrom = 1900;
-      resolvedYearTo = currentYear;
+      resolvedYearTo = defaultYearTo;
     } else if (resolvedYearFrom !== null && resolvedYearTo === null) {
       resolvedYearTo = resolvedYearFrom;
     } else if (resolvedYearFrom === null && resolvedYearTo !== null) {
@@ -180,14 +260,31 @@ export class SearchCarController {
       return res.status(400).json({ message: 'condition must be NEW or USED when provided' });
     }
 
+    const resolvedSellerType = typeof sellerType === 'string' && sellerType.trim() !== ''
+      ? sellerType.trim().toUpperCase()
+      : null;
+
+    if (resolvedSellerType !== null && resolvedSellerType !== 'PRIVATE' && resolvedSellerType !== 'PROFESSIONAL') {
+      return res.status(400).json({ message: 'sellerType must be PRIVATE or PROFESSIONAL when provided' });
+    }
+
+    const resolvedClientPhone = typeof clientPhone === 'string' && clientPhone.trim() !== ''
+      ? sanitizePhone(clientPhone)
+      : null;
+
+    if (resolvedClientPhone && !isValidMobilePhoneDigits(resolvedClientPhone)) {
+      return res.status(400).json({ message: 'Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.' });
+    }
+
     const wanted = await prisma.wantedCar.create({
       data: {
         brand: brand.trim(),
         model: resolvedModel,
         version: resolvedVersion,
         clientName: typeof clientName === 'string' && clientName.trim() !== '' ? clientName.trim() : null,
-        clientPhone: typeof clientPhone === 'string' && clientPhone.trim() !== '' ? clientPhone.trim() : null,
+        clientPhone: resolvedClientPhone,
         seller: typeof seller === 'string' && seller.trim() !== '' ? seller.trim() : null,
+        sellerType: resolvedSellerType as SellerType | null,
         condition: resolvedCondition as WantedCarCondition | null,
         yearFrom: resolvedYearFrom as number,
         yearTo: resolvedYearTo as number,
@@ -219,11 +316,19 @@ export class SearchCarController {
     const wanted = await prisma.wantedCar.findUnique({ where: { id }, include: { cars: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } } } });
     if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
 
+    const resolvedClientPhone = typeof clientPhone === 'string' && clientPhone.trim() !== ''
+      ? sanitizePhone(clientPhone)
+      : null;
+
+    if (resolvedClientPhone && !isValidMobilePhoneDigits(resolvedClientPhone)) {
+      return res.status(400).json({ message: 'Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.' });
+    }
+
     const updated = await prisma.wantedCar.update({
       where: { id },
       data: {
         clientName: typeof clientName === 'string' && clientName.trim() !== '' ? clientName.trim() : null,
-        clientPhone: typeof clientPhone === 'string' && clientPhone.trim() !== '' ? clientPhone.trim() : null,
+        clientPhone: resolvedClientPhone,
         seller: typeof seller === 'string' && seller.trim() !== '' ? seller.trim() : null
       },
       include: { cars: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } } }
@@ -233,6 +338,10 @@ export class SearchCarController {
   }
 
   async manualSearch(req: Request, res: Response): Promise<Response> {
+    if (!isExternalSearchEnabled()) {
+      return res.status(409).json({ message: 'Busca externa desativada. O cronjob executa as buscas quando habilitado.' });
+    }
+
     const { wantedCarId, city, state } = req.body as ManualSearchBody;
 
     if (typeof wantedCarId !== 'string') {
@@ -241,6 +350,9 @@ export class SearchCarController {
 
     const wanted = await prisma.wantedCar.findUnique({ where: { id: wantedCarId } });
     if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
+    if (!canSearchWanted(wanted)) {
+      return res.status(409).json({ message: 'Esse carro já saiu da fila de busca.' });
+    }
 
     if (!process.env.APIFY_TOKEN) {
       return res.status(500).json({ message: 'APIFY_TOKEN nao configurado.' });
@@ -255,6 +367,7 @@ export class SearchCarController {
         model: wanted.model,
         version: wanted.version ?? null,
         condition: wanted.condition,
+        sellerType: (wanted as { sellerType?: SellerType | null }).sellerType ?? null,
         yearFrom: wanted.yearFrom,
         yearTo: wanted.yearTo,
         maxPrice: wanted.maxPrice,
@@ -273,16 +386,7 @@ export class SearchCarController {
         });
       }
 
-      const savedCount = await prisma.$transaction(async (tx) => {
-        const created = await tx.car.createMany({
-          data: results.map((car) => mapExternalCarToCreateInput(car, wanted)),
-          skipDuplicates: true
-        });
-
-        await tx.wantedCar.update({ where: { id: wanted.id }, data: { status: 'FOUND' } });
-
-        return created.count;
-      });
+      const savedCount = await persistSearchResults(wanted, results);
 
       const message = savedCount > 0
         ? `Busca concluida. ${savedCount} anuncios salvos.`
@@ -302,6 +406,187 @@ export class SearchCarController {
       });
     } catch (error) {
       console.error('[SearchCarController] manual search failed', error);
+      return res.status(500).json({ message: 'Falha ao buscar anuncios externos.' });
+    }
+  }
+
+  async manualSearchOlx(req: Request, res: Response): Promise<Response> {
+    if (!isExternalSearchEnabled()) {
+      return res.status(409).json({ message: 'Busca externa desativada. O cronjob executa as buscas quando habilitado.' });
+    }
+
+    const { wantedCarId, city, state } = req.body as ManualSearchBody;
+
+    if (typeof wantedCarId !== 'string') {
+      return res.status(400).json({ message: 'wantedCarId is required' });
+    }
+
+    const wanted = await prisma.wantedCar.findUnique({ where: { id: wantedCarId } });
+    if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
+    if (!canSearchWanted(wanted)) {
+      return res.status(409).json({ message: 'Esse carro já saiu da fila de busca.' });
+    }
+
+    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : null;
+    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
+
+    try {
+      const debugEnabled = isOlxDebugEnabled();
+      const searchResponse = debugEnabled
+        ? await this.searchOlxService.executeWithDebug({
+          brand: wanted.brand,
+          model: wanted.model,
+          version: wanted.version ?? null,
+          condition: wanted.condition,
+          sellerType: (wanted as { sellerType?: SellerType | null }).sellerType ?? null,
+          yearFrom: wanted.yearFrom,
+          yearTo: wanted.yearTo,
+          maxPrice: wanted.maxPrice,
+          mileageFrom: wanted.mileageFrom,
+          mileageTo: wanted.mileageTo,
+          city: resolvedCity,
+          state: resolvedState
+        })
+        : { results: await this.searchOlxService.execute({
+          brand: wanted.brand,
+          model: wanted.model,
+          version: wanted.version ?? null,
+          condition: wanted.condition,
+          sellerType: (wanted as { sellerType?: SellerType | null }).sellerType ?? null,
+          yearFrom: wanted.yearFrom,
+          yearTo: wanted.yearTo,
+          maxPrice: wanted.maxPrice,
+          mileageFrom: wanted.mileageFrom,
+          mileageTo: wanted.mileageTo,
+          city: resolvedCity,
+          state: resolvedState
+        }) };
+
+      const results = searchResponse.results;
+
+      if (results.length === 0) {
+        return res.json({
+          wantedCarId: wanted.id,
+          adsFound: 0,
+          carsSaved: 0,
+          message: 'Nenhum anuncio encontrado na OLX.',
+          ...(debugEnabled && searchResponse.debug ? { debug: searchResponse.debug } : {})
+        });
+      }
+
+      const savedCount = await persistSearchResults(wanted, results);
+
+      const message = savedCount > 0
+        ? `Busca OLX concluida. ${savedCount} anuncios salvos.`
+        : 'Busca OLX concluida, mas nenhum anúncio novo foi salvo.';
+
+      console.info('[SearchCarController] manual search olx done', {
+        wantedCarId: wanted.id,
+        adsFound: results.length,
+        carsSaved: savedCount
+      });
+
+      return res.json({
+        wantedCarId: wanted.id,
+        adsFound: results.length,
+        carsSaved: savedCount,
+        message,
+        ...(debugEnabled && searchResponse.debug ? { debug: searchResponse.debug } : {})
+      });
+    } catch (error) {
+      console.error('[SearchCarController] manual search olx failed', error);
+      const details = isOlxDebugEnabled() ? toSafeErrorDetails(error) : null;
+      return res.status(500).json({
+        message: 'Falha ao buscar anuncios na OLX.',
+        ...(details ? { details } : {})
+      });
+    }
+  }
+
+  async manualSearchCombined(req: Request, res: Response): Promise<Response> {
+    if (!isExternalSearchEnabled()) {
+      return res.status(409).json({ message: 'Busca externa desativada. O cronjob executa as buscas quando habilitado.' });
+    }
+
+    const { wantedCarId, city, state } = req.body as ManualSearchBody;
+
+    if (typeof wantedCarId !== 'string') {
+      return res.status(400).json({ message: 'wantedCarId is required' });
+    }
+
+    const wanted = await prisma.wantedCar.findUnique({ where: { id: wantedCarId } });
+    if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
+    if (!canSearchWanted(wanted)) {
+      return res.status(409).json({ message: 'Esse carro já saiu da fila de busca.' });
+    }
+
+    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : null;
+    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
+
+    const searchParams = {
+      brand: wanted.brand,
+      model: wanted.model,
+      version: wanted.version ?? null,
+      condition: wanted.condition,
+      sellerType: (wanted as { sellerType?: SellerType | null }).sellerType ?? null,
+      yearFrom: wanted.yearFrom,
+      yearTo: wanted.yearTo,
+      maxPrice: wanted.maxPrice,
+      mileageFrom: wanted.mileageFrom,
+      mileageTo: wanted.mileageTo,
+      city: resolvedCity,
+      state: resolvedState
+    };
+
+    try {
+      const results: ExternalCar[] = [];
+
+      try {
+        results.push(...await this.searchService.execute(searchParams));
+      } catch (error) {
+        console.error('[SearchCarController] webmotors search failed', error);
+      }
+
+      try {
+        results.push(...await this.searchMercadoLivreService.execute(searchParams));
+      } catch (error) {
+        console.error('[SearchCarController] mercadolivre search failed', error);
+      }
+
+      try {
+        results.push(...await this.searchOlxService.execute(searchParams));
+      } catch (error) {
+        console.error('[SearchCarController] olx search failed', error);
+      }
+
+      if (results.length === 0) {
+        return res.json({
+          wantedCarId: wanted.id,
+          adsFound: 0,
+          carsSaved: 0,
+          message: 'Nenhum anuncio encontrado.'
+        });
+      }
+
+      const savedCount = await persistSearchResults(wanted, results);
+      const message = savedCount > 0
+        ? `Busca concluida. ${savedCount} anuncios salvos.`
+        : 'Busca concluida, mas nenhum anuncio novo foi salvo.';
+
+      console.info('[SearchCarController] combined search done', {
+        wantedCarId: wanted.id,
+        adsFound: results.length,
+        carsSaved: savedCount
+      });
+
+      return res.json({
+        wantedCarId: wanted.id,
+        adsFound: results.length,
+        carsSaved: savedCount,
+        message
+      });
+    } catch (error) {
+      console.error('[SearchCarController] combined search failed', error);
       return res.status(500).json({ message: 'Falha ao buscar anuncios externos.' });
     }
   }
@@ -344,6 +629,10 @@ export class SearchCarController {
     });
 
     return res.json(wanted.map(mapWantedToDto));
+  }
+
+  async getSearchSchedule(_req: Request, res: Response): Promise<Response> {
+    return res.json(getCarSearchSchedule());
   }
 
   async listWantedCars(req: Request, res: Response): Promise<Response> {

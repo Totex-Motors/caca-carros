@@ -3,6 +3,7 @@ export type SearchCarParams = {
   model: string;
   version: string | null;
   condition: 'NEW' | 'USED' | null;
+  sellerType: 'PRIVATE' | 'PROFESSIONAL' | null;
   yearFrom: number;
   yearTo: number | null;
   maxPrice: number;

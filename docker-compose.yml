@@ -39,7 +39,9 @@ services:
       ADMIN_EMAIL: admin@caca.local
       ADMIN_PASSWORD: admin123
       APIFY_TIMEOUT_MS: "180000"
-      CAR_SEARCH_CRON: 0 */6 * * *
+      # Choose mode: TEST (every 20 minutes) or OFFICIAL (every 12 hours)
+      CAR_SEARCH_MODE: TEST
+      EXTERNAL_SEARCH_ENABLED: 'true'
       CAR_CLEANUP_CRON: 0 3 * * *
       CAR_RETENTION_DAYS: "30"
     ports:

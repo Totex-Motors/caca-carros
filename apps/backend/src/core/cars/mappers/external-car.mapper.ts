@@ -6,23 +6,55 @@ type WantedCarLike = {
   model: string;
 };
 
-function normalizePhotos(photos: string[]): string[] {
+function readEnv(name: string): string | null {
+  const value = process.env[name];
+  return value && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isOlxSource(url: string): boolean {
+  return url.includes('olx.com.br');
+}
+
+function isOlxImage(url: string): boolean {
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.svg')) return false;
+
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.includes('olx');
+  } catch {
+    return false;
+  }
+}
+
+function normalizeFallbackPhoto(value: string | null): string | null {
+  if (!value) return null;
+  if (!value.startsWith('http')) return null;
+  return value;
+}
+
+function normalizePhotos(photos: string[], sourceUrl: string): string[] {
   const output: string[] = [];
   const seen = new Set<string>();
+  const filterOlx = isOlxSource(sourceUrl);
 
   for (const photo of photos) {
     if (!photo || typeof photo !== 'string') continue;
-    if (!photo.startsWith('http')) continue;
-    if (seen.has(photo)) continue;
-    seen.add(photo);
-    output.push(photo);
+    const normalized = photo.startsWith('//') ? `https:${photo}` : photo;
+    if (!normalized.startsWith('http')) continue;
+    if (filterOlx && !isOlxImage(normalized)) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    output.push(normalized);
   }
 
   return output;
 }
 
 export function mapExternalCarToCreateInput(external: ExternalCar, wanted: WantedCarLike) {
-  const photos = normalizePhotos(external.photos);
+  const photos = normalizePhotos(external.photos, external.url);
+  const fallbackPhoto = normalizeFallbackPhoto(readEnv('DEFAULT_CAR_PHOTO_URL'));
+  const resolvedPhotos = photos.length > 0 ? photos : fallbackPhoto ? [fallbackPhoto] : [];
   const title = external.title.trim().length > 0 ? external.title : `${wanted.brand} ${wanted.model}`.trim();
 
   return {
@@ -36,9 +68,9 @@ export function mapExternalCarToCreateInput(external: ExternalCar, wanted: Wante
     transmission: external.transmission ?? null,
     city: external.city ?? null,
     state: external.state ?? null,
-    photos,
+    photos: resolvedPhotos,
     url: external.url,
-    image: photos[0] ?? null,
+    image: resolvedPhotos[0] ?? null,
     wantedCarId: wanted.id
   };
 }
