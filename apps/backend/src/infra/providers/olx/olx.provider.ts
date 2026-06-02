@@ -54,8 +54,8 @@ function normalizeFilters(params: SearchCarParams): OlxSearchFilters {
     priceMax: normalizeMaxPrice(params.maxPrice),
     kmMin: toPositiveInteger(params.mileageFrom ?? null),
     kmMax: toPositiveInteger(params.mileageTo ?? null),
-    yearMin,
-    yearMax,
+    yearMin: yearMin !== null && yearMin > 1900 ? yearMin : null,
+    yearMax: yearMax !== null && yearMax > 1900 ? yearMax : null,
     condition: params.condition,
     sellerType: params.sellerType ?? null
   };

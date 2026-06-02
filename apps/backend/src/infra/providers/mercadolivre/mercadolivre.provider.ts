@@ -55,9 +55,7 @@ function normalizeFilters(params: SearchCarParams): MercadoLivreSearchFilters {
 }
 
 function shouldSkipByRange(listing: MercadoLivreListing, filters: MercadoLivreSearchFilters): boolean {
-  if (listing.year === null) {
-    if (filters.yearMin !== null || filters.yearMax !== null) return true;
-  } else {
+  if (listing.year !== null) {
     if (filters.yearMin !== null && listing.year < filters.yearMin) return true;
     if (filters.yearMax !== null && listing.year > filters.yearMax) return true;
   }
@@ -99,7 +97,7 @@ export class MercadoLivreProvider {
   async searchWithDebug(params: SearchCarParams): Promise<{ cars: ExternalCar[]; debug?: MercadoLivreScrapeDebug }> {
     const filters = normalizeFilters(params);
     const adsLimit = clampAdsLimit(Number(process.env.MERCADOLIVRE_ADS_LIMIT ?? 10));
-    const maxPages = Math.max(1, Math.trunc(Number(process.env.MERCADOLIVRE_MAX_PAGES ?? 1)) || 1);
+    const maxPages = Math.max(1, Math.trunc(Number(process.env.MERCADOLIVRE_MAX_PAGES ?? 3)) || 3);
     const retryAttempts = Math.max(1, Math.trunc(Number(process.env.MERCADOLIVRE_RETRY_ATTEMPTS ?? 1)));
 
     console.info('[mercadolivre.provider] starting search', {

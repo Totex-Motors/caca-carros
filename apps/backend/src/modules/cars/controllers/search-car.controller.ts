@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prisma/client';
 import { prisma } from '../../../infra/database/prisma/client';
-import { getCarSearchSchedule } from '../../../infra/jobs/car-search.job';
+import { getCarSearchSchedule, isWantedCarSearching } from '../../../infra/jobs/car-search.job';
 import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
 import { SearchCarService } from '../../../core/cars/services/search-car.service';
@@ -20,6 +20,7 @@ type CarDTO = {
   state: string | null;
   photos: string[];
   url: string;
+  portal: string | null;
 };
 
 type WantedCarDTO = {
@@ -39,6 +40,7 @@ type WantedCarDTO = {
   maxPrice: number;
   status: WantedCarStatus;
   createdAt: string;
+  searching: boolean;
   cars?: CarDTO[];
 };
 
@@ -125,7 +127,8 @@ function mapCarToDto(car: Car): CarDTO {
     city: car.city ?? null,
     state: car.state ?? null,
     photos,
-    url: car.url
+    url: car.url,
+    portal: car.portal ?? null
   };
 }
 
@@ -147,6 +150,7 @@ function mapWantedToDto(wanted: WantedCar & { cars?: Car[] }): WantedCarDTO {
     maxPrice: wanted.maxPrice,
     status: wanted.status,
     createdAt: wanted.createdAt.toISOString(),
+    searching: isWantedCarSearching(wanted.id),
     cars: wanted.cars ? wanted.cars.map(mapCarToDto) : undefined
   };
 }

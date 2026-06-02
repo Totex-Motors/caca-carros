@@ -65,12 +65,20 @@ function toProxyConfig(credentials: OlxProxyCredentials, port: number): OlxProxy
 }
 
 export class OlxProxyPool {
-  private readonly credentials: OlxProxyCredentials;
+  private _credentials: OlxProxyCredentials | undefined;
+  private readonly _explicitCredentials: OlxProxyCredentials | undefined;
   private readonly sessionPorts = new Map<string, number>();
   private nextIndex = 0;
 
   constructor(credentials?: OlxProxyCredentials) {
-    this.credentials = credentials ?? loadProxyCredentials();
+    this._explicitCredentials = credentials;
+  }
+
+  private get credentials(): OlxProxyCredentials {
+    if (!this._credentials) {
+      this._credentials = this._explicitCredentials ?? loadProxyCredentials();
+    }
+    return this._credentials;
   }
 
   getProxy(sessionId?: string): OlxProxyConfig {

@@ -137,6 +137,11 @@ async function waitForResults(page: Page): Promise<void> {
   await page.waitForSelector('a[href*="MLB-"]', { timeout: SEARCH_TIMEOUT_MS }).catch(() => undefined);
 }
 
+async function waitForDetailPage(page: Page): Promise<void> {
+  await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => undefined);
+}
+
 function isLikelyListingUrl(value: string): boolean {
   const cleaned = value.toLowerCase().split('#')[0].split('?')[0];
   return cleaned.includes('mercadolivre.com.br') && cleaned.includes('mlb-');
@@ -288,7 +293,7 @@ async function extractDetailListing(page: Page, url: string, openClaw = createOp
   try {
     await setupRequestInterception(detailPage);
     await detailPage.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
-    await waitForResults(detailPage);
+    await waitForDetailPage(detailPage);
 
     const bodyText = await detailPage.locator('body').innerText({ timeout: 5000 }).catch(() => '');
     const title = trimToNull(await detailPage.locator('h1').first().textContent({ timeout: 3000 }).catch(() => null)) ?? trimToNull(bodyText.split('\n')[0]);
@@ -357,9 +362,14 @@ export class MercadoLivreScraper {
       debug.pages.push({ page: 1, url, cardCount: cards.length, collected: 0 });
 
       const adsLimit = Math.max(1, Math.min(Math.trunc(options.maxAds) || 10, 10));
+      const searchDeadline = Date.now() + SEARCH_TIMEOUT_MS;
 
       for (const card of cards) {
         if (listings.length >= adsLimit) break;
+        if (Date.now() >= searchDeadline) {
+          console.warn('[mercadolivre.scraper] search timeout during details', { collected: listings.length });
+          break;
+        }
 
         const absoluteUrl = normalizeUrl(card.url, url);
         if (!absoluteUrl || !isLikelyListingUrl(absoluteUrl) || seen.has(absoluteUrl)) continue;
@@ -368,9 +378,8 @@ export class MercadoLivreScraper {
         if (!parsed) continue;
 
         let resolved = parsed;
-        const needsDetail = resolved.price === null || resolved.year === null || resolved.km === null || resolved.photos.length === 0;
 
-        if (needsDetail) {
+        if (resolved.price === null || resolved.year === null) {
           debug.detailAttempts += 1;
           try {
             const detail = await extractDetailListing(page, resolved.url);

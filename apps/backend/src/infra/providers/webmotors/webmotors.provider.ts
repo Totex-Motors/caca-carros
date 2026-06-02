@@ -271,11 +271,13 @@ export class WebmotorsProvider {
     const timeoutMs = Number(process.env.APIFY_TIMEOUT_MS ?? 40000);
     const url = `https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
 
+    const actorInput = buildActorInput(params);
     console.info('[webmotors.provider] requesting webmotors search', {
       brand: params.brand,
       model: params.model,
       yearFrom: params.yearFrom,
-      yearTo: params.yearTo
+      yearTo: params.yearTo,
+      url: actorInput.startUrls[0]?.url
     });
 
     const response = await fetchWithTimeout(
@@ -285,7 +287,7 @@ export class WebmotorsProvider {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(buildActorInput(params))
+        body: JSON.stringify(actorInput)
       },
       Number.isFinite(timeoutMs) ? timeoutMs : 40000
     );
@@ -297,6 +299,7 @@ export class WebmotorsProvider {
 
     const items = (await response.json()) as unknown;
     if (!Array.isArray(items)) return [];
+    console.info('[webmotors.provider] raw apify items', { count: items.length });
 
     const output: ExternalCar[] = [];
     const seen = new Set<string>();
@@ -305,7 +308,6 @@ export class WebmotorsProvider {
     for (const item of items as WebmotorsItem[]) {
       const normalized = normalizeItem(item, params);
       if (!normalized) continue;
-      if (!matchesVersion(normalized.title, versionTokens)) continue;
       if (seen.has(normalized.url)) continue;
       seen.add(normalized.url);
       output.push(normalized);

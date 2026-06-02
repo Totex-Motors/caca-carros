@@ -58,8 +58,8 @@ function buildFilterSuffix(filters: MercadoLivreSearchFilters): string {
 }
 
 export function normalizeMercadoLivreFilters(params: SearchCarParams): MercadoLivreSearchFilters {
-  const yearMin = toPositiveInteger(params.yearFrom) ?? null;
-  const yearMax = toPositiveInteger(params.yearTo ?? params.yearFrom) ?? yearMin;
+  const yearMin = (params.yearFrom && params.yearFrom > 1900) ? Math.trunc(params.yearFrom) : null;
+  const yearMax = (params.yearTo && params.yearTo > 1900) ? Math.trunc(params.yearTo) : yearMin;
 
   return {
     state: params.state ?? 'sp',
@@ -79,7 +79,8 @@ export function normalizeMercadoLivreFilters(params: SearchCarParams): MercadoLi
 
 export function buildMercadoLivreSearchUrl(filters: MercadoLivreSearchFilters): string {
   const brandSlug = slugify(filters.brand) || 'carros';
-  const modelSlug = slugify(filters.model) || brandSlug;
+  const modelWithVersion = filters.version ? `${filters.model} ${filters.version}` : filters.model;
+  const modelSlug = slugify(modelWithVersion) || brandSlug;
   const conditionSegment = resolveConditionSegment(filters.condition);
   const sellerTypeSegment = resolveSellerTypeSegment(filters.sellerType);
   const filterSuffix = buildFilterSuffix(filters);

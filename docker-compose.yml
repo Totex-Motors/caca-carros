@@ -49,7 +49,7 @@ services:
     networks:
       - caca_network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3333', (r) => {if (r.statusCode !== 404) throw new Error(r.statusCode)})"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3333/health | grep -q ok"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,6 +58,8 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3333
     container_name: caca_frontend
     restart: unless-stopped
     depends_on:
@@ -66,8 +68,6 @@ services:
       - "5173:5173"
     networks:
       - caca_network
-    environment:
-      VITE_API_URL: http://backend:3333
 
 volumes:
   caca_postgres_data:

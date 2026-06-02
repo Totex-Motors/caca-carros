@@ -21,6 +21,7 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }));
 
+app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/auth', authRoutes);
 app.use('/cars', carsRoutes);
 
