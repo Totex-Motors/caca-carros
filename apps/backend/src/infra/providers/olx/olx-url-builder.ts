@@ -84,12 +84,13 @@ export function buildOlxSearchUrl(filters: OlxSearchFilters, page: number): stri
 
   if (priceMin !== null) url.searchParams.set(PARAM_KEYS.priceMin, String(priceMin));
   if (priceMax !== null) url.searchParams.set(PARAM_KEYS.priceMax, String(priceMax));
-  if (shouldIncludeYearFilters(yearMin, yearMax)) {
-    if (yearMin !== null) url.searchParams.set(PARAM_KEYS.yearMin, String(yearMin));
+  // Only add year filters when yearMin is a real constraint (not the sentinel)
+  if (yearMin !== null) {
+    url.searchParams.set(PARAM_KEYS.yearMin, String(yearMin));
     if (yearMax !== null) url.searchParams.set(PARAM_KEYS.yearMax, String(yearMax));
   }
-  if (kmMin !== null) url.searchParams.set(PARAM_KEYS.kmMin, String(kmMin));
-  if (kmMax !== null) url.searchParams.set(PARAM_KEYS.kmMax, String(kmMax));
+  // Km filters are omitted from URL — OLX excludes listings without km data when km params are present.
+  // Km filtering is handled in post-scraping.
 
   const condition = resolveConditionParam(filters.condition);
   if (condition) url.searchParams.set(PARAM_KEYS.condition, condition);

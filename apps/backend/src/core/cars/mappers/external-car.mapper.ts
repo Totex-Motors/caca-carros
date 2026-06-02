@@ -57,13 +57,18 @@ export function mapExternalCarToCreateInput(external: ExternalCar, wanted: Wante
   const resolvedPhotos = photos.length > 0 ? photos : fallbackPhoto ? [fallbackPhoto] : [];
   const title = external.title.trim().length > 0 ? external.title : `${wanted.brand} ${wanted.model}`.trim();
 
+  const currentYear = new Date().getFullYear();
+  const km = external.km !== null && external.km >= 0 && external.km <= 1_500_000 ? external.km : null;
+  const price = external.price >= 0 && external.price <= 50_000_000 ? external.price : 0;
+  const year = external.year >= 1900 && external.year <= currentYear + 2 ? external.year : currentYear;
+
   return {
     brand: wanted.brand,
     model: wanted.model,
     title,
-    year: external.year,
-    price: external.price,
-    mileage: external.km ?? null,
+    year,
+    price,
+    mileage: km,
     fuel: external.fuel_type ?? null,
     transmission: external.transmission ?? null,
     city: external.city ?? null,

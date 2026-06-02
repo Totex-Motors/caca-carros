@@ -33,26 +33,18 @@ function resolveSellerTypeSegment(sellerType: MercadoLivreSearchFilters['sellerT
 function buildFilterSuffix(filters: MercadoLivreSearchFilters): string {
   const suffixParts: string[] = [];
 
-  const yearFrom = toPositiveInteger(filters.yearMin);
-  const yearTo = toPositiveInteger(filters.yearMax ?? filters.yearMin);
-  if (yearFrom !== null || yearTo !== null) {
-    const from = yearFrom ?? yearTo ?? new Date().getFullYear();
-    const to = yearTo ?? yearFrom ?? from;
-    suffixParts.push(`YearRange_${from}-${to}`);
+  const yearFrom = filters.yearMin !== null && filters.yearMin > 1900 ? filters.yearMin : null;
+  if (yearFrom !== null) {
+    const yearTo = filters.yearMax !== null && filters.yearMax > 1900 ? filters.yearMax : yearFrom;
+    suffixParts.push(`YearRange_${yearFrom}-${yearTo}`);
   }
 
   const priceMax = toPositiveInteger(filters.priceMax);
   if (priceMax !== null) {
     suffixParts.push(`PriceRange_0BRL-${priceMax}BRL`);
   }
-
-  const kmMin = toPositiveInteger(filters.kmMin);
-  const kmMax = toPositiveInteger(filters.kmMax);
-  if (kmMin !== null || kmMax !== null) {
-    const from = kmMin ?? 0;
-    const to = kmMax ?? kmMin ?? from;
-    suffixParts.push(`KILOMETERS_${from}km-${to}km`);
-  }
+  // Km filter omitted from URL — ML excludes listings without km when this param is set.
+  // Km filtering is handled in post-scraping.
 
   return suffixParts.length > 0 ? `_${suffixParts.join('_')}` : '';
 }

@@ -13,6 +13,7 @@ const BLOCKED_URL_SNIPPETS = ['doubleclick', 'googletagmanager', 'google-analyti
 
 type MercadoLivreCard = {
   url: string;
+  title: string | null;
   text: string;
   imageUrl: string | null;
 };
@@ -161,7 +162,7 @@ function extractCard(card: MercadoLivreCard): MercadoLivreListing | null {
   if (!text) return null;
 
   const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
-  const title = trimToNull(lines[0]) ?? trimToNull(text);
+  const title = trimToNull(card.title) ?? trimToNull(lines[0]) ?? trimToNull(text);
   if (!title) return null;
 
   return {
@@ -180,9 +181,56 @@ function extractCard(card: MercadoLivreCard): MercadoLivreListing | null {
 
 async function extractCards(page: Page, baseUrl: string): Promise<MercadoLivreCard[]> {
   return page.evaluate((currentBaseUrl) => {
+    const TITLE_SELECTORS = [
+      '.poly-component__title',
+      '.ui-search-item__title',
+      'h2',
+      'h3',
+      '[class*="title"]'
+    ];
+
+    function findTitle(root: Element, anchor: HTMLAnchorElement): string | null {
+      for (const selector of TITLE_SELECTORS) {
+        const el = root.querySelector(selector);
+        const text = el?.textContent?.trim();
+        if (text && text.length > 3) return text;
+      }
+      const anchorText = anchor.textContent?.trim();
+      if (anchorText && anchorText.length > 3) return anchorText;
+      return null;
+    }
+
+    function findImageUrl(root: Element): string | null {
+      const source = root.querySelector('picture source');
+      if (source) {
+        const srcset = source.getAttribute('srcset') || source.getAttribute('data-srcset');
+        if (srcset) {
+          const first = srcset.split(',')[0]?.trim().split(' ')[0];
+          if (first && first.startsWith('http')) return first;
+        }
+      }
+
+      const img = root.querySelector('img');
+      if (!img) return null;
+
+      const lazy = img.getAttribute('data-src') || img.getAttribute('data-lazy') || img.getAttribute('data-original');
+      if (lazy && lazy.startsWith('http')) return lazy;
+
+      const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+      if (srcset) {
+        const first = srcset.split(',')[0]?.trim().split(' ')[0];
+        if (first && first.startsWith('http')) return first;
+      }
+
+      const src = img.getAttribute('src');
+      if (src && src.startsWith('http') && !src.startsWith('data:')) return src;
+
+      return null;
+    }
+
     const anchors = Array.from(document.querySelectorAll('a[href*="MLB-"]')) as HTMLAnchorElement[];
     const seen = new Set<string>();
-    const cards: Array<{ url: string; text: string; imageUrl: string | null }> = [];
+    const cards: Array<{ url: string; title: string | null; text: string; imageUrl: string | null }> = [];
 
     for (const anchor of anchors) {
       const href = anchor.href || anchor.getAttribute('href') || '';
@@ -193,13 +241,13 @@ async function extractCards(page: Page, baseUrl: string): Promise<MercadoLivreCa
       seen.add(absoluteUrl);
 
       const root = anchor.closest('article, li, section, div') ?? anchor;
-      const text = root.textContent?.trim() || anchor.textContent?.trim() || '';
-      if (!text) continue;
+      const title = findTitle(root, anchor);
+      if (!title) continue;
 
-      const image = root.querySelector('img') as HTMLImageElement | null;
-      const imageUrl = image?.currentSrc || image?.src || image?.getAttribute('data-src') || image?.getAttribute('data-lazy') || null;
+      const text = root.textContent?.trim() || title;
+      const imageUrl = findImageUrl(root);
 
-      cards.push({ url: absoluteUrl, text, imageUrl });
+      cards.push({ url: absoluteUrl, title, text, imageUrl });
     }
 
     return cards;
@@ -350,6 +398,7 @@ export class MercadoLivreScraper {
 
     try {
       const url = buildMercadoLivreSearchUrl(filters);
+      console.info('[mercadolivre.scraper] navigating to search URL', { url });
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
       await waitForResults(page);
 
@@ -359,6 +408,7 @@ export class MercadoLivreScraper {
       }
 
       const cards = await extractCards(page, url);
+      console.info('[mercadolivre.scraper] cards found on page', { count: cards.length });
       debug.pages.push({ page: 1, url, cardCount: cards.length, collected: 0 });
 
       const adsLimit = Math.max(1, Math.min(Math.trunc(options.maxAds) || 10, 10));

@@ -7,6 +7,7 @@ export function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,7 +17,7 @@ export function Login() {
     setLoading(true);
 
     try {
-      const { data } = await api.post<{ token: string }>('/auth/login', { email, password });
+      const { data } = await api.post<{ token: string }>('/auth/login', { email, password, rememberMe });
       localStorage.setItem('token', data.token);
       navigate('/');
     } catch {
@@ -71,6 +72,40 @@ export function Login() {
             </div>
 
             {error && <div className="error">{error}</div>}
+
+            <button
+              type="button"
+              onClick={() => setRememberMe((v) => !v)}
+              style={{
+                all: 'unset',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                cursor: 'pointer',
+                width: 'fit-content',
+                userSelect: 'none'
+              }}
+            >
+              <span style={{
+                width: 15,
+                height: 15,
+                borderRadius: 4,
+                border: `2px solid ${rememberMe ? 'var(--primary)' : 'rgba(8,145,178,0.35)'}`,
+                background: rememberMe ? 'var(--primary)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'background 0.15s, border-color 0.15s'
+              }}>
+                {rememberMe && (
+                  <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                    <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Lembrar usuário</span>
+            </button>
 
             <button
               disabled={loading}

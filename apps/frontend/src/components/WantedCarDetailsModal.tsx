@@ -73,8 +73,16 @@ function sanitizePhone(value: string): string {
   return value.replace(/\D/g, '');
 }
 
-function isValidMobilePhoneDigits(value: string): boolean {
-  return value.length === 11 && value[2] === '9';
+function isValidPhone(digits: string): boolean {
+  return digits.length === 8 || digits.length === 10 || digits.length === 11;
+}
+
+function formatPhoneMask(digits: string): string {
+  if (digits.length === 0) return '';
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 8) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
 export function WantedCarDetailsModal({
@@ -213,10 +221,11 @@ export function WantedCarDetailsModal({
                     {isEditing ? (
                       <input
                         type="text"
-                        value={clientPhone}
-                        onChange={(e) => setClientPhone(sanitizePhone(e.target.value))}
+                        value={formatPhoneMask(clientPhone)}
+                        onChange={(e) => setClientPhone(sanitizePhone(e.target.value).slice(0, 11))}
                         inputMode="numeric"
-                        placeholder="11999999999"
+                        placeholder="(11) 96182-8095"
+                        maxLength={15}
                       />
                     ) : (
                       <div style={{ fontSize: 14, fontWeight: 600, color: clientPhone ? 'var(--text)' : 'var(--muted)' }}>
@@ -241,8 +250,8 @@ export function WantedCarDetailsModal({
                           type="button"
                           disabled={clientSavingId === wantedCar.id}
                           onClick={() => {
-                            if (clientPhone && !isValidMobilePhoneDigits(clientPhone)) {
-                              setClientPhoneError('Telefone deve ter 11 dígitos e iniciar com 9 após o DDD.');
+                            if (clientPhone && !isValidPhone(clientPhone)) {
+                              setClientPhoneError('Telefone deve ter 8, 10 ou 11 dígitos.');
                               return;
                             }
                             setClientPhoneError(null);

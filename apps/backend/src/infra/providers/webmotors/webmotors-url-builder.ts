@@ -113,9 +113,13 @@ export function buildWebmotorsSearchUrl(params: SearchCarParams): string {
   const brand = normalizeBrand(params.brand);
   const model = normalizeWebmotorsModel(params.model);
 
-  const modelSlug = model.modelSlug || slugify(params.model);
-  const modelParam = model.modelParam || slugify(params.model).toUpperCase();
+  const baseModelSlug = model.modelSlug || slugify(params.model);
+  const baseModelParam = model.modelParam || slugify(params.model).toUpperCase();
   const brandSlug = brand.slug || slugify(params.brand);
+
+  // Include version in model slug and param (e.g. Dolphin + Mini → dolphin-mini / DOLPHIN MINI)
+  const modelSlug = params.version ? slugify(`${params.model} ${params.version.trim()}`) : baseModelSlug;
+  const modelParam = params.version ? `${baseModelParam} ${params.version.trim().toUpperCase()}` : baseModelParam;
 
   const url = new URL(
     `https://www.webmotors.com.br/${segment}/${location.stateCode}/${brandSlug}/${modelSlug}`
@@ -149,12 +153,6 @@ export function buildWebmotorsSearchUrl(params: SearchCarParams): string {
   if (maxPrice !== null) {
     url.searchParams.set('precoate', String(maxPrice));
   }
-
-  const mileageFrom = toPositiveInteger(params.mileageFrom ?? null);
-  if (mileageFrom !== null) url.searchParams.set('kmde', String(mileageFrom));
-
-  const mileageTo = toPositiveInteger(params.mileageTo ?? null);
-  if (mileageTo !== null) url.searchParams.set('kmate', String(mileageTo));
 
   url.searchParams.set('page', '1');
 

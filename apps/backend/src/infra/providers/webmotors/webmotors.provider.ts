@@ -309,13 +309,18 @@ export class WebmotorsProvider {
       const normalized = normalizeItem(item, params);
       if (!normalized) continue;
       if (seen.has(normalized.url)) continue;
+      if (!matchesVersion(normalized.title, versionTokens)) {
+        console.info('[webmotors.provider] skipped (version mismatch)', { title: normalized.title });
+        continue;
+      }
       seen.add(normalized.url);
       output.push(normalized);
       if (output.length >= MAX_REQUESTS) break;
     }
 
     console.info('[webmotors.provider] normalized results', {
-      count: output.length
+      count: output.length,
+      versionTokens
     });
 
     return output;

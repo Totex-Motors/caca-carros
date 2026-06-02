@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CarDTO, WantedCarCondition, WantedCarDTO, WantedCarSellerType, WantedCarStatus } from '@caca/shared/types/car';
 import { api } from '../services/api';
@@ -103,8 +103,16 @@ function sanitizeNumberInput(value: string): string {
   return value.replace(/\D/g, '');
 }
 
-function isValidMobilePhoneDigits(value: string): boolean {
-  return value.length === 11 && value[2] === '9';
+function isValidPhone(digits: string): boolean {
+  return digits.length === 8 || digits.length === 10 || digits.length === 11;
+}
+
+function formatPhoneMask(digits: string): string {
+  if (digits.length === 0) return '';
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 8) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
 function formatNumberInput(value: string): string {
@@ -282,6 +290,7 @@ export function Home() {
   const [now, setNow] = useState(() => Date.now());
 
   const [form, setForm] = useState<CreateWantedInput>(createEmptyForm());
+  const prevAnySearchingRef = useRef<boolean>(false);
 
   const hasToken = Boolean(localStorage.getItem('token'));
   const selectedWantedCar = useMemo(
@@ -392,7 +401,18 @@ export function Home() {
 
   useEffect(() => {
     const anySearching = wantedCars.some((w) => w.searching);
+    const wasSearching = prevAnySearchingRef.current;
+    prevAnySearchingRef.current = anySearching;
+
+    // Busca acabou: refresh imediato para mostrar resultados finais
+    if (wasSearching && !anySearching) {
+      loadWanted();
+      if (selectedWantedId) loadCarsPage(selectedWantedId, 1);
+      return;
+    }
+
     if (!anySearching) return;
+
     const interval = window.setInterval(() => {
       loadWanted();
     }, 15000);
@@ -513,8 +533,8 @@ export function Home() {
       return;
     }
 
-    if (form.clientPhone && !isValidMobilePhoneDigits(form.clientPhone)) {
-      setError('Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.');
+    if (form.clientPhone && !isValidPhone(form.clientPhone)) {
+      setError('Telefone deve ter 8, 10 ou 11 digitos.');
       setLoading(false);
       return;
     }
@@ -799,10 +819,14 @@ export function Home() {
             <label>Telefone/WhatsApp (opcional)</label>
             <input
               type="text"
-              value={form.clientPhone}
-              onChange={(e) => setForm((s) => ({ ...s, clientPhone: sanitizeNumberInput(e.target.value) }))}
-              placeholder="11999999999"
+              value={formatPhoneMask(form.clientPhone)}
+              onChange={(e) => {
+                const digits = sanitizeNumberInput(e.target.value).slice(0, 11);
+                setForm((s) => ({ ...s, clientPhone: digits }));
+              }}
+              placeholder="(11) 96182-8095"
               inputMode="numeric"
+              maxLength={15}
             />
           </div>
 
@@ -858,7 +882,7 @@ export function Home() {
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <span className="muted">📅 {formatYearRange(w.yearFrom, w.yearTo)}</span>
-                  <span className="muted">🛣️ {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'} km</span>
+                  <span className="muted">0 {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'} km</span>
                   <span className="muted">💰 Máx: {formatMaxPrice(Number(w.maxPrice))}</span>
                   {w.condition && <span className="muted">🏷 {formatCondition(w.condition)}</span>}
                 </div>
@@ -946,7 +970,7 @@ export function Home() {
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <span className="muted">📅 {formatYearRange(w.yearFrom, w.yearTo)}</span>
-                  <span className="muted">🛣️ {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'} km</span>
+                  <span className="muted">0 {w.mileageFrom ?? '—'} a {w.mileageTo ?? '—'} km</span>
                   <span className="muted">💰 Máx: {formatMaxPrice(Number(w.maxPrice))}</span>
                 </div>
                 {(w.clientName || w.seller) && (

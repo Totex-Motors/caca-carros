@@ -78,7 +78,7 @@ export function CarList(props: { cars: CarDTO[] }) {
                     <span className="muted" style={{ fontSize: 11 }}>📅 {car.year}</span>
                   )}
                   <span className="muted" style={{ fontSize: 11 }}>
-                    🛣️ {formatNumber(car.km, ' km')}
+                    0 {formatNumber(car.km, ' km')}
                   </span>
                   {car.fuel_type && (
                     <span className="muted" style={{ fontSize: 11 }}>⛽ {car.fuel_type}</span>
