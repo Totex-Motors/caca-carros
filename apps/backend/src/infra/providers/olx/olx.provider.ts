@@ -62,25 +62,19 @@ function normalizeFilters(params: SearchCarParams): OlxSearchFilters {
 }
 
 function shouldSkipByRange(listing: OlxListing, filters: OlxSearchFilters): boolean {
-  if (listing.price === null) {
-    if (filters.priceMin !== null || filters.priceMax !== null) return true;
-  } else {
+  if (listing.price !== null) {
     if (filters.priceMin !== null && listing.price < filters.priceMin) return true;
     if (filters.priceMax !== null && listing.price > filters.priceMax) return true;
   }
 
   const year = listing.year;
-  if (year === null) {
-    if (filters.yearMin !== null || filters.yearMax !== null) return true;
-  } else {
+  if (year !== null) {
     if (filters.yearMin !== null && year < filters.yearMin) return true;
     if (filters.yearMax !== null && year > filters.yearMax) return true;
   }
 
   const km = listing.km;
-  if (km === null) {
-    if (filters.kmMin !== null || filters.kmMax !== null) return true;
-  } else if (filters.kmMin !== null || filters.kmMax !== null) {
+  if (km !== null) {
     if (filters.kmMin !== null && km < filters.kmMin) return true;
     if (filters.kmMax !== null && km > filters.kmMax) return true;
   }

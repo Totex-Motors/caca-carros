@@ -20,7 +20,7 @@ export function isWantedCarSearching(id: string): boolean {
 }
 
 const DEFAULT_SEARCH_CRON = '0 */12 * * *';
-const TEST_SEARCH_CRON = '*/8 * * * *'; // every 8 minutes
+const TEST_SEARCH_CRON = '*/11 * * * *'; // every 11 minutes
 const DEFAULT_TIMEZONE = 'America/Sao_Paulo';
 
 function getCarSearchCronExpression(): string {

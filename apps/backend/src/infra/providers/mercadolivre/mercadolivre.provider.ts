@@ -1,6 +1,5 @@
 import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import type { SearchCarParams } from '../../../core/cars/interfaces/search-car';
-import { buildVersionTokens, matchesVersion } from '../olx/olx-model-parser';
 import { MercadoLivreScraper } from './mercadolivre-scraper';
 import { normalizeMercadoLivreFilters } from './mercadolivre-url-builder';
 import type { MercadoLivreListing, MercadoLivreScrapeDebug, MercadoLivreSearchFilters } from './mercadolivre-types';
@@ -34,9 +33,9 @@ function normalizeKm(value: number | null): number | null {
 }
 
 function normalizeFilters(params: SearchCarParams): MercadoLivreSearchFilters {
-  const yearMin = Number.isFinite(params.yearFrom) && params.yearFrom > 0 ? Math.trunc(params.yearFrom) : null;
-  const yearToRaw = params.yearTo ?? params.yearFrom;
-  const yearMax = yearToRaw !== null && yearToRaw !== undefined && Number.isFinite(yearToRaw) && yearToRaw > 0 ? Math.trunc(yearToRaw) : yearMin;
+  const yearMin = Number.isFinite(params.yearFrom) && params.yearFrom > 1900 ? Math.trunc(params.yearFrom) : null;
+  const yearToRaw = params.yearTo ?? null;
+  const yearMax = yearToRaw !== null && Number.isFinite(yearToRaw) && yearToRaw > 1900 ? Math.trunc(yearToRaw) : yearMin;
 
   return {
     state: params.state ?? 'sp',
@@ -61,9 +60,7 @@ function shouldSkipByRange(listing: MercadoLivreListing, filters: MercadoLivreSe
   }
 
   const km = normalizeKm(listing.km);
-  if (km === null) {
-    if (filters.kmMin !== null || filters.kmMax !== null) return true;
-  } else {
+  if (km !== null) {
     if (filters.kmMin !== null && km < filters.kmMin) return true;
     if (filters.kmMax !== null && km > filters.kmMax) return true;
   }
@@ -115,14 +112,12 @@ export class MercadoLivreProvider {
       sessionId: buildSessionId(filters)
     });
 
-    const versionTokens = buildVersionTokens(filters.version);
     const output: ExternalCar[] = [];
     const seen = new Set<string>();
 
     for (const listing of listings) {
       if (listing.price === null) continue;
       if (seen.has(listing.url)) continue;
-      if (!matchesVersion(listing.title, versionTokens)) continue;
       if (shouldSkipByRange(listing, filters)) continue;
 
       seen.add(listing.url);
