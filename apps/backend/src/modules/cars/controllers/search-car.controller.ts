@@ -128,7 +128,7 @@ function mapCarToDto(car: Car): CarDTO {
     state: car.state ?? null,
     photos,
     url: car.url,
-    portal: (car as { portal?: string | null }).portal ?? null
+    portal: car.portal ?? null
   };
 }
 
