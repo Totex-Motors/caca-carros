@@ -276,11 +276,7 @@ export class SearchCarController {
       ? sanitizePhone(clientPhone)
       : null;
 
-    if (resolvedClientPhone && !isValidMobilePhoneDigits(resolvedClientPhone)) {
-      return res.status(400).json({ message: 'Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.' });
-    }
-
-    const wanted = await prisma.wantedCar.create({
+     const wanted = await prisma.wantedCar.create({
       data: {
         brand: brand.trim(),
         model: resolvedModel,
@@ -323,10 +319,6 @@ export class SearchCarController {
     const resolvedClientPhone = typeof clientPhone === 'string' && clientPhone.trim() !== ''
       ? sanitizePhone(clientPhone)
       : null;
-
-    if (resolvedClientPhone && !isValidMobilePhoneDigits(resolvedClientPhone)) {
-      return res.status(400).json({ message: 'Telefone deve ter 11 digitos e iniciar com 9 apos o DDD.' });
-    }
 
     const updated = await prisma.wantedCar.update({
       where: { id },
