@@ -4,10 +4,17 @@ import { prisma } from '../../../infra/database/prisma/client';
 
 export class LoginService {
   async execute(input: { email: string; password: string; rememberMe?: boolean }): Promise<{ token: string }> {
-    const user = await prisma.user.findUnique({ where: { email: input.email } });
-    if (!user) throw new Error('Invalid credentials');
+    console.log('[login] attempting login with email:', input.email);
 
+    const user = await prisma.user.findUnique({ where: { email: input.email } });
+    if (!user) {
+      console.log('[login] user not found:', input.email);
+      throw new Error('Invalid credentials');
+    }
+
+    console.log('[login] user found, comparing password');
     const ok = await bcrypt.compare(input.password, user.password);
+    console.log('[login] password comparison result:', ok);
     if (!ok) throw new Error('Invalid credentials');
 
     const secret = process.env.JWT_SECRET;
