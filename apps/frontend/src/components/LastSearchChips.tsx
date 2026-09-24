@@ -1,6 +1,6 @@
 import type { LastSearchDTO } from '@caca/shared/types/car';
 
-const ICONE = { ok: '✅', vazio: '∅', erro: '⚠️', nao_configurado: '🔧' } as const;
+const ICONE = { ok: '✅', vazio: '∅', erro: '⚠️', bloqueado: '🚫', nao_configurado: '🔧' } as const;
 
 /** Resultado da ultima busca automatica em cada portal (explica por que nada apareceu). */
 export function LastSearchChips({ lastSearch }: { lastSearch: LastSearchDTO | null | undefined }) {
@@ -15,7 +15,15 @@ export function LastSearchChips({ lastSearch }: { lastSearch: LastSearchDTO | nu
         </span>
         {entradas.map(([portal, p]) => {
           const texto =
-            p.status === 'ok' ? `${p.count} anúncio(s)` : p.status === 'vazio' ? 'nada encontrado' : p.status === 'erro' ? 'falhou' : 'não configurado';
+            p.status === 'ok'
+              ? `${p.count} anúncio(s)`
+              : p.status === 'vazio'
+                ? 'nada encontrado'
+                : p.status === 'erro'
+                  ? 'falhou'
+                  : p.status === 'bloqueado'
+                    ? 'bloqueado, tenta de novo'
+                    : 'não configurado';
           return (
             <span key={portal} title={p.mensagem ?? ''} className={`search-chip ${p.status}`}>
               {ICONE[p.status]} {portal}: {texto}
