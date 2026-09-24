@@ -11,6 +11,7 @@ carsRoutes.use(authMiddleware);
 
 carsRoutes.post('/wanted', asyncHandler((req, res) => controller.createWanted(req, res)));
 carsRoutes.patch('/wanted/:id', asyncHandler((req, res) => controller.updateWanted(req, res)));
+carsRoutes.post('/wanted/:id/search', asyncHandler((req, res) => controller.searchNow(req, res)));
 carsRoutes.post('/search-external', asyncHandler((req, res) => controller.manualSearch(req, res)));
 carsRoutes.post('/search-olx', asyncHandler((req, res) => controller.manualSearchOlx(req, res)));
 carsRoutes.post('/search', asyncHandler((req, res) => controller.manualSearchCombined(req, res)));
