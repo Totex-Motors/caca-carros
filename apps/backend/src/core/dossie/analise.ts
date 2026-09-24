@@ -166,9 +166,15 @@ export async function analisarAnuncio(input: {
   const textoUsuario = typeof input.texto === 'string' ? input.texto.trim().slice(0, 12_000) : '';
   const fotosUsuario = validarFotos(input.fotos);
 
+  // Com o texto colado pelo usuario o link fica so como referencia (o portal normalmente ja bloqueou a leitura).
   let lido: AnuncioLido | null = null;
-  if (url && !textoUsuario && fotosUsuario.length === 0) {
-    lido = await lerAnuncio(url);
+  if (url && !textoUsuario) {
+    try {
+      lido = await lerAnuncio(url);
+    } catch (err) {
+      // Portal bloqueou, mas o usuario enviou fotos: segue a analise so com elas.
+      if (!(err instanceof AnuncioBloqueadoError) || fotosUsuario.length === 0) throw err;
+    }
   }
 
   const texto = [lido?.texto, textoUsuario].filter(Boolean).join('\n\n');
