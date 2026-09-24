@@ -47,6 +47,16 @@ npm run dev
 Frontend: `http://localhost:5173`
 Backend: `http://localhost:3333`
 
+## Esqueci minha senha / nao consigo entrar
+
+O login padrao criado pelo seed e `admin@caca.local` / `admin123` (ou o valor de `ADMIN_EMAIL` / `ADMIN_PASSWORD` no `.env`).
+
+Para redefinir a senha de um usuario (ou cria-lo, se nao existir), rode apontando para o banco correto (`DATABASE_URL`):
+
+```bash
+npm run user:reset-password -w apps/backend -- admin@caca.local NovaSenha123
+```
+
 ## Endpoints principais
 
 - `POST /auth/login`
