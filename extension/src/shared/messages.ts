@@ -19,3 +19,17 @@ export type RespostaAnalise =
   | { type: 'ERRO'; mensagem: string; precisaLogin?: boolean };
 
 export const PORTA_ANALISE = 'autoexpert-analise';
+
+// Ponte site do caca-carros -> extensao: o site pede para o navegador do usuario abrir e ler o anuncio.
+export const PORTA_CAPTURA = 'autoexpert-captura';
+export type PedidoCaptura = { type: 'CAPTURAR_URL'; url: string };
+export type RespostaCaptura =
+  | { type: 'CAPTURA_OK'; captura: Captura; fotos: string[] }
+  | { type: 'CAPTURA_ERRO'; mensagem: string };
+
+// Service worker -> content script da aba do anuncio.
+export type PedidoCapturaAba = { type: 'CAPTURAR_PAGINA' };
+
+// Mensagens trocadas por window.postMessage entre a pagina do caca-carros e o content script da ponte.
+export const ORIGEM_SITE = 'caca-carros';
+export const ORIGEM_EXTENSAO = 'autoexpert-ext';

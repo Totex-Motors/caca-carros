@@ -23,7 +23,11 @@ export default defineManifest({
   version: pkg.version,
   action: { default_popup: 'src/popup/index.html', default_title: 'AutoExpert AI' },
   background: { service_worker: 'src/background/index.ts', type: 'module' },
-  content_scripts: [{ matches: [...PORTAIS, ...DEV], js: ['src/content/index.tsx'], run_at: 'document_idle' }],
+  content_scripts: [
+    { matches: [...PORTAIS, ...DEV], js: ['src/content/index.tsx'], run_at: 'document_idle' },
+    // Ponte: o site do caca-carros pede para o navegador do usuario ler um anuncio (ver src/bridge).
+    { matches: ['https://carros.grupocardoso.online/*', ...DEV], js: ['src/bridge/index.ts'], run_at: 'document_start' }
+  ],
   permissions: ['storage'],
   // Fotos vem de CDNs variadas dos portais; o service worker baixa e reduz antes de enviar ao servidor.
   host_permissions: ['https://*/*', ...DEV]
