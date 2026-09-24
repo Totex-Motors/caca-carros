@@ -67,7 +67,13 @@ function distinctiveVersion(version: string | null): string | null {
 }
 
 export function buildScraperInput(params: SearchCarParams, portals: ScraperPortal[] = SCRAPER_PORTALS) {
-  const parts = parseOlxVehicleParts({ brand: params.brand, model: params.model, version: params.version });
+  // Nome curto sem numeros ("Dolphin Mini", "T-Cross", "Compass") vai inteiro: o separador de versao trataria
+  // "Mini" como versao. So nomes longos da FIPE ("COMPASS LONGITUDE 2.0 4x2 Flex") passam pela separacao.
+  const rawModel = params.model.trim();
+  const isSimpleModel = !/\d/.test(rawModel) && rawModel.split(/\s+/).length <= 3;
+  const parts = isSimpleModel
+    ? { model: rawModel, version: params.version }
+    : parseOlxVehicleParts({ brand: params.brand, model: params.model, version: params.version });
   const maxPrice = Number.isFinite(params.maxPrice) && params.maxPrice > 0 && params.maxPrice < 2147483647 ? Math.trunc(params.maxPrice) : undefined;
   return {
     brand: params.brand,
