@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import parser from 'cron-parser';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, WantedCar } from '@prisma/client';
 import { prisma } from '../database/prisma/client';
 import { mapExternalCarToCreateInput } from '../../core/cars/mappers/external-car.mapper';
 import type { ExternalCar } from '../../core/cars/interfaces/car';
@@ -78,6 +78,92 @@ function dedupeResults(results: ExternalCar[]): ExternalCar[] {
   return output;
 }
 
+let services: {
+  webmotors: SearchCarService;
+  mercadoLivre: SearchMercadoLivreService;
+  olx: SearchOlxService;
+} | null = null;
+
+function getServices() {
+  services ??= {
+    webmotors: new SearchCarService(),
+    mercadoLivre: new SearchMercadoLivreService(),
+    olx: new SearchOlxService()
+  };
+  return services;
+}
+
+async function searchAndSave(
+  wanted: WantedCar,
+  portalName: string,
+  searchFn: () => Promise<ExternalCar[]>
+): Promise<void> {
+  try {
+    const raw = await searchFn();
+    const unique = dedupeResults(raw);
+    if (unique.length === 0) {
+      console.info(`[car-search.job] ${portalName} no results`, { wantedCarId: wanted.id });
+      return;
+    }
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.car.createMany({
+        data: unique.map((car) => mapExternalCarToCreateInput(car, wanted, portalName)),
+        skipDuplicates: true
+      });
+      await tx.wantedCar.update({ where: { id: wanted.id }, data: { status: 'FOUND' } });
+    });
+    console.info(`[car-search.job] ${portalName} saved`, { wantedCarId: wanted.id, count: unique.length });
+  } catch (err) {
+    console.error(`[car-search.job] ${portalName} failed`, err);
+  }
+}
+
+/**
+ * Busca um carro desejado em todos os portais e salva os resultados.
+ * Ignora a chamada se esse carro ja estiver sendo buscado.
+ */
+export async function searchWantedCar(wanted: WantedCar): Promise<void> {
+  if (searchingWantedIds.has(wanted.id)) return;
+
+  const { webmotors, mercadoLivre, olx } = getServices();
+  const params = {
+    brand: wanted.brand,
+    model: wanted.model,
+    version: wanted.version ?? null,
+    condition: wanted.condition,
+    sellerType: wanted.sellerType ?? null,
+    yearFrom: wanted.yearFrom,
+    yearTo: wanted.yearTo,
+    mileageFrom: wanted.mileageFrom,
+    mileageTo: wanted.mileageTo,
+    maxPrice: wanted.maxPrice,
+    city: null,
+    state: null
+  };
+
+  searchingWantedIds.add(wanted.id);
+  try {
+    await Promise.all([
+      searchAndSave(wanted, 'webmotors', () => webmotors.execute(params)),
+      searchAndSave(wanted, 'mercadolivre', () => mercadoLivre.execute(params)),
+      searchAndSave(wanted, 'olx', () => olx.execute(params))
+    ]);
+  } finally {
+    searchingWantedIds.delete(wanted.id);
+  }
+}
+
+/**
+ * Dispara a primeira busca de um carro recem-cadastrado em segundo plano,
+ * sem esperar a proxima rodada do cron. Nao faz nada se a busca externa estiver desativada.
+ */
+export function startImmediateSearch(wanted: WantedCar): void {
+  if (!isExternalSearchEnabled()) return;
+  searchWantedCar(wanted).catch((err) => {
+    console.error('[car-search.job] immediate search failed', { wantedCarId: wanted.id, err });
+  });
+}
+
 export function startCarSearchJob() {
   if (!isExternalSearchEnabled()) {
     console.log('[car-search.job] external search disabled');
@@ -89,35 +175,6 @@ export function startCarSearchJob() {
     throw new Error(`Invalid CAR_SEARCH_CRON: ${expression}`);
   }
 
-  const service = new SearchCarService();
-  const mercadoLivreService = new SearchMercadoLivreService();
-  const olxService = new SearchOlxService();
-
-  async function searchAndSave(
-    wanted: Parameters<typeof mapExternalCarToCreateInput>[1],
-    portalName: string,
-    searchFn: () => Promise<ExternalCar[]>
-  ): Promise<void> {
-    try {
-      const raw = await searchFn();
-      const unique = dedupeResults(raw);
-      if (unique.length === 0) {
-        console.info(`[car-search.job] ${portalName} no results`, { wantedCarId: wanted.id });
-        return;
-      }
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await tx.car.createMany({
-          data: unique.map((car) => mapExternalCarToCreateInput(car, wanted, portalName)),
-          skipDuplicates: true
-        });
-        await tx.wantedCar.update({ where: { id: wanted.id }, data: { status: 'FOUND' } });
-      });
-      console.info(`[car-search.job] ${portalName} saved`, { wantedCarId: wanted.id, count: unique.length });
-    } catch (err) {
-      console.error(`[car-search.job] ${portalName} failed`, err);
-    }
-  }
-
   cron.schedule(
     expression,
     async () => {
@@ -127,31 +184,7 @@ export function startCarSearchJob() {
         });
 
         for (const wanted of pending) {
-          const params = {
-            brand: wanted.brand,
-            model: wanted.model,
-            version: wanted.version ?? null,
-            condition: (wanted as { condition: 'NEW' | 'USED' | null }).condition,
-            sellerType: (wanted as { sellerType?: 'PRIVATE' | 'PROFESSIONAL' | null }).sellerType ?? null,
-            yearFrom: wanted.yearFrom,
-            yearTo: wanted.yearTo,
-            mileageFrom: wanted.mileageFrom,
-            mileageTo: wanted.mileageTo,
-            maxPrice: wanted.maxPrice,
-            city: null,
-            state: null
-          };
-
-          searchingWantedIds.add(wanted.id);
-          try {
-            await Promise.all([
-              searchAndSave(wanted, 'webmotors', () => service.execute(params)),
-              searchAndSave(wanted, 'mercadolivre', () => mercadoLivreService.execute(params)),
-              searchAndSave(wanted, 'olx', () => olxService.execute(params))
-            ]);
-          } finally {
-            searchingWantedIds.delete(wanted.id);
-          }
+          await searchWantedCar(wanted);
         }
       } catch (err) {
         console.error('[car-search.job] failed', err);

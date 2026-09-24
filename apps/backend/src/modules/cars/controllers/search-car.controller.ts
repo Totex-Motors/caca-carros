@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prisma/client';
 import { prisma } from '../../../infra/database/prisma/client';
-import { getCarSearchSchedule, isWantedCarSearching } from '../../../infra/jobs/car-search.job';
+import { getCarSearchSchedule, isWantedCarSearching, startImmediateSearch } from '../../../infra/jobs/car-search.job';
 import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
 import { SearchCarService } from '../../../core/cars/services/search-car.service';
@@ -294,6 +294,9 @@ export class SearchCarController {
         status: 'PENDING'
       }
     });
+
+    // Primeira busca na hora, sem esperar a proxima rodada automatica.
+    startImmediateSearch(wanted);
 
     const wantedWithCars = await prisma.wantedCar.findUnique({
       where: { id: wanted.id },
