@@ -57,6 +57,22 @@ Para redefinir a senha de um usuario (ou cria-lo, se nao existir), rode apontand
 npm run user:reset-password -w apps/backend -- admin@caca.local NovaSenha123
 ```
 
+## Consulta com IA (AutoExpert)
+
+O app tem duas abas:
+
+- **Consulta** (`/consulta`): digite "Marca Modelo Ano" para o dossiê técnico (motor, câmbio, comando, defeitos
+  crônicos com custo, plano de 20.000 km, FIPE e IPVA por UF) ou cole o link de um anúncio / o texto + fotos para a
+  IA vistoriar: preço x FIPE, km x desgaste nas fotos, divergências, estrutura e sinais de golpe.
+- **Completo** (`/`): cadastro de carros desejados com busca automática. Cada carro tem **Ver dossiê** e cada anúncio
+  encontrado tem **Analisar**.
+
+Configuração (backend): `OPENAI_API_KEY` (obrigatória), `OPENAI_MODEL` (padrão `gpt-5.5`), `OPENAI_REASONING_EFFORT`
+(padrão `medium`). Na VPS, grave a chave sem exibi-la com `bash /opt/caca-carros/deploy/set-openai-key.sh`.
+
+Portais como OLX, Webmotors e Mercado Livre costumam bloquear a leitura automática do link; nesse caso a tela pede o
+texto e as fotos do anúncio (a análise é a mesma).
+
 ## Endpoints principais
 
 - `POST /auth/login`
@@ -64,3 +80,4 @@ npm run user:reset-password -w apps/backend -- admin@caca.local NovaSenha123
 - `POST /cars/search-external`
 - `GET /cars/wanted`
 - `GET /cars/wanted/:id/cars`
+- `POST /dossie` · `POST /dossie/analise` · `GET /dossie/wanted/:id`

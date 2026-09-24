@@ -82,7 +82,7 @@ server {
   listen [::]:80;
   server_name $DOMAIN;
 
-  client_max_body_size 5m;
+  client_max_body_size 25m;
 
   location / {
     proxy_pass http://127.0.0.1:8090;
@@ -96,6 +96,8 @@ server {
 NGINX
   [ -n "$LINK" ] && ln -sf "$SITE" "$LINK"
 fi
+# Instalacoes antigas criaram o site com limite de 5m; a analise de anuncios envia fotos.
+sed -i 's/client_max_body_size 5m;/client_max_body_size 25m;/' "$SITE"
 if ! nginx -t; then
   echo "Configuracao do nginx invalida; removendo $SITE para nao afetar os outros sites." >&2
   rm -f "$SITE" ${LINK:+"$LINK"}
