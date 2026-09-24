@@ -286,6 +286,8 @@ export function Home() {
   const [carsError, setCarsError] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [searchingNowId, setSearchingNowId] = useState<string | null>(null);
+  const [searchNowError, setSearchNowError] = useState<{ id: string; message: string } | null>(null);
   const [clientSavingId, setClientSavingId] = useState<string | null>(null);
   const [clientSaveError, setClientSaveError] = useState<string | null>(null);
   const [brands, setBrands] = useState<FipeBrand[]>([]);
@@ -653,6 +655,20 @@ export function Home() {
     loadCarsPage(selectedWantedId, page);
   }
 
+  async function searchNow(wantedCarId: string): Promise<void> {
+    setSearchNowError(null);
+    setSearchingNowId(wantedCarId);
+    try {
+      await api.post(`/cars/wanted/${wantedCarId}/search`);
+      await loadWanted();
+    } catch (error) {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+      setSearchNowError({ id: wantedCarId, message: message ?? 'Não foi possível iniciar a busca agora.' });
+    } finally {
+      setSearchingNowId(null);
+    }
+  }
+
   async function updateWantedStatus(wantedCarId: string, status: WantedCarStatus): Promise<void> {
     setStatusError(null);
     setStatusUpdatingId(wantedCarId);
@@ -947,6 +963,7 @@ export function Home() {
                   <div className="muted">📍 {[w.city, w.state].filter(Boolean).join(' / ')}</div>
                 )}
                 <LastSearchChips lastSearch={w.lastSearch} />
+                {searchNowError?.id === w.id && <div className="error" style={{ marginTop: 6, fontSize: 13 }}>{searchNowError.message}</div>}
                 {w.sellerType && <div className="muted">Anunciante: {formatSellerType(w.sellerType)}</div>}
                 {(w.clientName || w.seller) && (
                   <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -979,6 +996,17 @@ export function Home() {
                 >
                   Ver detalhes →
                 </button>
+                {!w.searching && (
+                  <button
+                    className="secondary"
+                    style={{ height: 36, fontSize: 13, borderRadius: 12 }}
+                    disabled={searchingNowId === w.id}
+                    onClick={() => searchNow(w.id)}
+                    title="Refaz a busca nos portais agora, sem esperar a próxima rodada automática"
+                  >
+                    {searchingNowId === w.id ? 'Iniciando…' : '🔄 Buscar agora'}
+                  </button>
+                )}
                 {w.yearFrom >= 1950 && (
                   <button
                     style={{ height: 36, fontSize: 13, borderRadius: 12 }}

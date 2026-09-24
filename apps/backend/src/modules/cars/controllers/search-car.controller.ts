@@ -335,6 +335,23 @@ export class SearchCarController {
     return res.status(201).json(mapWantedToDto(wantedWithCars));
   }
 
+  /** "Buscar agora": refaz a busca de um carro ja cadastrado, sem esperar a rodada automatica. */
+  async searchNow(req: Request, res: Response): Promise<Response> {
+    const { id } = req.params as { id?: string };
+    if (!id) return res.status(400).json({ message: 'id is required' });
+    if (!isExternalSearchEnabled()) {
+      return res.status(409).json({ message: 'A busca nos portais está desativada no servidor (EXTERNAL_SEARCH_ENABLED).' });
+    }
+
+    const wanted = await prisma.wantedCar.findUnique({ where: { id }, include: { cars: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } } } });
+    if (!wanted) return res.status(404).json({ message: 'WantedCar not found' });
+    if (wanted.status === 'BOUGHT') return res.status(409).json({ message: 'Este carro já foi comprado; a busca está encerrada.' });
+    if (isWantedCarSearching(id)) return res.status(202).json(mapWantedToDto(wanted));
+
+    startImmediateSearch(wanted);
+    return res.status(202).json(mapWantedToDto(wanted));
+  }
+
   async updateWanted(req: Request, res: Response): Promise<Response> {
     const { id } = req.params as { id?: string };
     const { clientName, clientPhone, seller } = req.body as { clientName?: unknown; clientPhone?: unknown; seller?: unknown };
