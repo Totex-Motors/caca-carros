@@ -82,3 +82,42 @@ model Car {
   @@index([createdAt])
   @@map("cars")
 }
+
+// Dossie tecnico de um modelo/ano gerado pela IA (AutoExpert). Um por slug, reaproveitado entre consultas.
+model Dossie {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  consulta  String
+  marca     String
+  modelo    String
+  ano       Int
+  modeloIa  String   @map("modelo_ia")
+  dados     Json
+  fipe      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  aliases DossieAlias[]
+
+  @@index([createdAt])
+  @@map("dossies")
+}
+
+// Outras grafias da mesma busca ("compass 2018", "jeep compass 2018") apontando para o mesmo dossie.
+model DossieAlias {
+  alias    String @id
+  dossieId String @map("dossie_id")
+  dossie   Dossie @relation(fields: [dossieId], references: [id], onDelete: Cascade)
+
+  @@map("dossie_aliases")
+}
+
+// Analise de um anuncio especifico (link ou texto + fotos enviados pelo usuario).
+model AnaliseAnuncio {
+  id        String   @id @default(uuid())
+  url       String?
+  dados     Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([url])
+  @@map("analises_anuncio")
+}
