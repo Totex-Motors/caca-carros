@@ -1,0 +1,53 @@
+# Caca Carros em uma VPS: banco + servidor + site, isolados de outros sistemas da maquina.
+# Uso: docker compose -f deploy/docker-compose.vps.yml --env-file deploy/.env up -d --build
+# O site fica em 127.0.0.1:8090; o nginx da VPS publica o subdominio (ver deploy/install.sh).
+
+name: caca-carros
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: caca
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em deploy/.env}
+      POSTGRES_DB: caca_carros
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caca -d caca_carros"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PORT: 3333
+      DATABASE_URL: postgresql://caca:${POSTGRES_PASSWORD}@postgres:5432/caca_carros?schema=public
+      CORS_ORIGIN: https://${DOMAIN:?defina DOMAIN em deploy/.env}
+      RUN_PRISMA_MIGRATE: "true"
+      RUN_DB_SEED: "true"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8090:5173"
+
+volumes:
+  postgres_data:
