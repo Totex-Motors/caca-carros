@@ -1,3 +1,5 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "redirects": [
+    { "source": "/:path*", "destination": "https://carros.grupocardoso.online/:path*", "permanent": false }
+  ]
 }

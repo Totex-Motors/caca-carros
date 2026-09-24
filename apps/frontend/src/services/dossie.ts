@@ -46,6 +46,7 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     const message = (error.response?.data as { message?: unknown } | undefined)?.message;
     if (typeof message === 'string') return message;
     if (error.code === 'ECONNABORTED') return 'A análise demorou demais. Tente novamente.';
+    if (!error.response) return 'Não foi possível falar com o servidor. Confira sua internet e se está em carros.grupocardoso.online.';
   }
   return fallback;
 }
