@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { CarDTO } from '@caca/shared/types/car';
 
 function formatNumber(value: number | null, suffix = ''): string {
@@ -96,26 +97,44 @@ export function CarList(props: { cars: CarDTO[] }) {
                       <span className="muted" style={{ fontWeight: 600 }}>Sob consulta</span>
                     )}
                   </div>
-                  <a
-                    href={car.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      fontSize: 12,
-                      padding: '4px 12px',
-                      borderRadius: 999,
-                      background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
-                      color: '#fff',
-                      fontWeight: 700,
-                      letterSpacing: '0.02em',
-                      boxShadow: '0 3px 10px rgba(8, 145, 178, 0.28)',
-                      textDecoration: 'none',
-                      display: 'inline-block',
-                      transition: 'transform 0.15s, box-shadow 0.15s'
-                    }}
-                  >
-                    Ver anúncio →
-                  </a>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <a
+                      href={car.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontSize: 12,
+                        padding: '4px 12px',
+                        borderRadius: 999,
+                        background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
+                        color: '#fff',
+                        fontWeight: 700,
+                        letterSpacing: '0.02em',
+                        boxShadow: '0 3px 10px rgba(8, 145, 178, 0.28)',
+                        textDecoration: 'none',
+                        display: 'inline-block',
+                        transition: 'transform 0.15s, box-shadow 0.15s'
+                      }}
+                    >
+                      Ver anúncio →
+                    </a>
+                    <Link
+                      to={`/consulta?url=${encodeURIComponent(car.url)}`}
+                      title="Vistoria do anúncio com IA: km, fotos, preço x FIPE e sinais de golpe"
+                      style={{
+                        fontSize: 12,
+                        padding: '4px 12px',
+                        borderRadius: 999,
+                        background: 'linear-gradient(135deg, var(--accent), #6d28d9)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        boxShadow: '0 3px 10px rgba(124, 58, 237, 0.28)',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      🔍 Analisar
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>

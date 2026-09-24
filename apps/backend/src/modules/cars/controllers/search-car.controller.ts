@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prisma/client';
 import { prisma } from '../../../infra/database/prisma/client';
 import { getCarSearchSchedule, isWantedCarSearching, startImmediateSearch } from '../../../infra/jobs/car-search.job';
+import { getOrCreateDossie } from '../../../core/dossie/dossie.service';
 import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
 import { SearchCarService } from '../../../core/cars/services/search-car.service';
@@ -297,6 +298,13 @@ export class SearchCarController {
 
     // Primeira busca na hora, sem esperar a proxima rodada automatica.
     startImmediateSearch(wanted);
+
+    // Dossie do modelo/ano em segundo plano, para o botao "Ver dossie" abrir na hora.
+    if (wanted.yearFrom >= 1950 && process.env.OPENAI_API_KEY) {
+      getOrCreateDossie(`${wanted.brand} ${wanted.model} ${wanted.yearFrom}`).catch((err) => {
+        console.error('[dossie] geracao no cadastro falhou', { wantedCarId: wanted.id, err });
+      });
+    }
 
     const wantedWithCars = await prisma.wantedCar.findUnique({
       where: { id: wanted.id },

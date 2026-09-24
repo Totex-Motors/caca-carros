@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import type { CarDTO, WantedCarCondition, WantedCarDTO, WantedCarSellerType, WantedCarStatus } from '@caca/shared/types/car';
 import { api } from '../services/api';
 import { WantedCarDetailsModal } from '../components/WantedCarDetailsModal';
+import { DossieModal } from '../components/DossieModal';
+import { TopNav } from '../components/TopNav';
 import { getFipeBrands, getFipeModels, getFipeYears, type FipeBrand, type FipeModel, type FipeYear } from '../services/fipe';
 
 type WantedCarView = WantedCarDTO & { version: string | null };
@@ -264,6 +266,8 @@ function groupFipeModelsByBase(fipeModels: FipeModel[]): ParsedModelGroup[] {
 
 export function Home() {
   const navigate = useNavigate();
+  const [linkAnuncio, setLinkAnuncio] = useState('');
+  const [dossieWanted, setDossieWanted] = useState<{ id: string; titulo: string } | null>(null);
   const [wantedCars, setWantedCars] = useState<WantedCarDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -671,10 +675,30 @@ export function Home() {
 
   return (
     <div className="container">
+      <TopNav />
       <div className="app-header">
         <h1 className="title">Caça Carros</h1>
         <p className="app-subtitle">Cadastre os carros desejados e encontre os melhores anúncios automaticamente</p>
       </div>
+
+      <form
+        className="card"
+        style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (/^https?:\/\//i.test(linkAnuncio.trim())) navigate(`/consulta?url=${encodeURIComponent(linkAnuncio.trim())}`);
+        }}
+      >
+        <span style={{ fontWeight: 800 }}>🔍 Já tem um anúncio?</span>
+        <input
+          style={{ flex: '1 1 260px' }}
+          value={linkAnuncio}
+          onChange={(e) => setLinkAnuncio(e.target.value)}
+          placeholder="Cole o link de qualquer portal para a IA vistoriar"
+          aria-label="Link do anúncio"
+        />
+        <button type="submit" disabled={!/^https?:\/\//i.test(linkAnuncio.trim())}>Analisar</button>
+      </form>
 
       <form className="card" onSubmit={createWanted}>
         <h2 style={{ marginTop: 0, marginBottom: 4, fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
@@ -919,6 +943,14 @@ export function Home() {
                 >
                   Ver detalhes →
                 </button>
+                {w.yearFrom >= 1950 && (
+                  <button
+                    style={{ height: 36, fontSize: 13, borderRadius: 12 }}
+                    onClick={() => setDossieWanted({ id: w.id, titulo: `${w.brand} ${w.model} ${w.yearFrom}` })}
+                  >
+                    📘 Ver dossiê
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1013,6 +1045,10 @@ export function Home() {
           </div>
         )}
       </div>
+
+      {dossieWanted && (
+        <DossieModal wantedId={dossieWanted.id} titulo={dossieWanted.titulo} onClose={() => setDossieWanted(null)} />
+      )}
 
       {selectedWantedCar && (
         <WantedCarDetailsModal
