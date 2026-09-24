@@ -1,0 +1,184 @@
+/* ---- Tema escuro ----
+   Ativado por <html data-theme="dark"> (botao no topo; a escolha fica salva no navegador).
+   Sem escolha salva, segue o tema do sistema (ver src/services/theme.ts). */
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --primary: #22d3ee;
+  --primary-dark: #67e8f9;
+  --primary-light: rgba(34, 211, 238, 0.12);
+  --accent: #a78bfa;
+  --accent-light: rgba(167, 139, 250, 0.14);
+  --success: #4ade80;
+  --success-light: rgba(74, 222, 128, 0.12);
+  --danger: #f87171;
+  --danger-light: rgba(248, 113, 113, 0.12);
+  --surface: #111a2b;
+  --surface-soft: #0f1a2c;
+  --border: rgba(148, 163, 184, 0.16);
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --empty-bg: #0d1624;
+  --bought-bg: linear-gradient(145deg, rgba(167, 139, 250, 0.12) 0%, #0e1726 60%);
+  --bought-empty-bg: #0d1624;
+
+  --clay-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --clay-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --clay-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --clay-shadow-accent: 0 10px 32px rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme='dark'] body {
+  background:
+    radial-gradient(ellipse at top left, rgba(34, 211, 238, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(167, 139, 250, 0.08) 0%, transparent 50%),
+    #0a111e;
+  color: var(--text);
+}
+
+html[data-theme='dark'] .card,
+html[data-theme='dark'] .modal-card {
+  background: linear-gradient(145deg, #111a2b 0%, #0e1726 100%);
+  border-color: var(--border);
+  box-shadow: var(--clay-shadow);
+}
+
+html[data-theme='dark'] .card:hover {
+  box-shadow: var(--clay-shadow-lg);
+}
+
+html[data-theme='dark'] .card-found {
+  background: linear-gradient(145deg, rgba(74, 222, 128, 0.10) 0%, #0e1726 60%);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+html[data-theme='dark'] input,
+html[data-theme='dark'] select,
+html[data-theme='dark'] textarea.consulta-texto {
+  background: #0b1422;
+  border-color: rgba(148, 163, 184, 0.22);
+  color: var(--text);
+  box-shadow: none;
+}
+
+html[data-theme='dark'] input::placeholder,
+html[data-theme='dark'] textarea::placeholder {
+  color: #64748b;
+}
+
+html[data-theme='dark'] input:disabled,
+html[data-theme='dark'] select:disabled {
+  background: #0f1827;
+}
+
+html[data-theme='dark'] select {
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2322d3ee' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+}
+
+html[data-theme='dark'] button {
+  background: linear-gradient(145deg, #0891b2 0%, #0e7490 100%);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme='dark'] button.secondary {
+  background: #111c2e;
+  color: var(--primary-dark);
+  border-color: rgba(34, 211, 238, 0.25);
+  box-shadow: none;
+}
+
+html[data-theme='dark'] .modal-backdrop {
+  background: rgba(2, 6, 14, 0.7);
+}
+
+html[data-theme='dark'] .modal-panel {
+  background: #0d1624;
+  border-color: var(--border);
+}
+
+html[data-theme='dark'] .badge-pending {
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde047;
+  border-color: rgba(250, 204, 21, 0.25);
+}
+
+html[data-theme='dark'] .badge-archived {
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
+html[data-theme='dark'] .tab-group,
+html[data-theme='dark'] .top-nav-tabs {
+  background: rgba(17, 26, 43, 0.8);
+  border-color: var(--border);
+}
+
+html[data-theme='dark'] .portal-badge,
+html[data-theme='dark'] .schedule-chip {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+html[data-theme='dark'] .title {
+  background: linear-gradient(135deg, #67e8f9 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Blocos do dossie e da analise */
+html[data-theme='dark'] .dx-stat,
+html[data-theme='dark'] .dx-alert,
+html[data-theme='dark'] .dx-photo,
+html[data-theme='dark'] .dx-callout,
+html[data-theme='dark'] .dx-ring > div,
+html[data-theme='dark'] .photo-thumb {
+  background: #0d1624;
+  border-color: var(--border);
+}
+
+html[data-theme='dark'] .dx-box {
+  background: #0c1522;
+}
+
+html[data-theme='dark'] .dx-note {
+  background: rgba(17, 26, 43, 0.7);
+}
+
+html[data-theme='dark'] .dx-chip {
+  background: #0f1a2c;
+  color: var(--text);
+}
+
+html[data-theme='dark'] .dx-chip.ok { background: rgba(74, 222, 128, 0.12); color: #86efac; }
+html[data-theme='dark'] .dx-chip.warn { background: rgba(250, 204, 21, 0.12); color: #fde047; }
+html[data-theme='dark'] .dx-chip.bad { background: rgba(248, 113, 113, 0.14); color: #fca5a5; }
+html[data-theme='dark'] .dx-chip.info { background: var(--primary-light); color: var(--primary-dark); }
+
+html[data-theme='dark'] .dx-alert.critica { background: rgba(248, 113, 113, 0.08); }
+
+/* Botao de tema */
+.theme-toggle {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+html[data-theme='dark'] .searching-chip {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+html[data-theme='dark'] .search-chip.ok { background: rgba(74, 222, 128, 0.12); color: #86efac; }
+html[data-theme='dark'] .search-chip.vazio { background: rgba(148, 163, 184, 0.12); color: #cbd5e1; }
+html[data-theme='dark'] .search-chip.erro { background: rgba(250, 204, 21, 0.12); color: #fde047; }
+html[data-theme='dark'] .search-chip.nao_configurado { background: rgba(248, 113, 113, 0.14); color: #fca5a5; }
+
+html[data-theme='dark'] button.secondary:hover:not(:disabled),
+html[data-theme='dark'] .tab-group button.secondary:hover:not(:disabled) {
+  background: #16243a;
+  color: var(--primary-dark);
+}

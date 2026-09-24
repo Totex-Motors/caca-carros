@@ -5,6 +5,8 @@ import { api } from '../services/api';
 import { WantedCarDetailsModal } from '../components/WantedCarDetailsModal';
 import { DossieModal } from '../components/DossieModal';
 import { TopNav } from '../components/TopNav';
+import { LastSearchChips } from '../components/LastSearchChips';
+import { UFS } from '../services/dossie';
 import { getFipeBrands, getFipeModels, getFipeYears, type FipeBrand, type FipeModel, type FipeYear } from '../services/fipe';
 
 type WantedCarView = WantedCarDTO & { version: string | null };
@@ -24,6 +26,8 @@ type CreateWantedInput = {
   clientName: string;
   clientPhone: string;
   seller: string;
+  state: string;
+  city: string;
 };
 
 type FipeYearOption = {
@@ -76,7 +80,9 @@ function createEmptyForm(): CreateWantedInput {
     maxPrice: '',
     clientName: '',
     clientPhone: '',
-    seller: ''
+    seller: '',
+    state: '',
+    city: ''
   };
 }
 
@@ -563,6 +569,8 @@ export function Home() {
         clientName: form.clientName?.trim() || null,
         clientPhone: form.clientPhone?.trim() || null,
         seller: form.seller?.trim() || null,
+        state: form.state || null,
+        city: form.city.trim() || null,
         sellerType: form.sellerType || null,
         condition: form.condition || null,
         yearFrom: selectedYearFrom?.year ?? null,
@@ -855,6 +863,30 @@ export function Home() {
           </div>
 
           <div className="field">
+            <label>Estado da busca (opcional)</label>
+            <select
+              value={form.state}
+              onChange={(e) => setForm((s) => ({ ...s, state: e.target.value }))}
+              disabled={loading}
+            >
+              <option value="">Padrão (SP)</option>
+              {UFS.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+            </select>
+          </div>
+
+          <div className="field">
+            <label>Cidade (opcional)</label>
+            <input
+              type="text"
+              value={form.city}
+              onChange={(e) => setForm((s) => ({ ...s, city: e.target.value }))}
+              placeholder={form.state ? 'Estado inteiro' : 'Escolha o estado'}
+              disabled={loading || !form.state}
+              maxLength={80}
+            />
+          </div>
+
+          <div className="field">
             <label>Vendedor (opcional)</label>
             <input
               type="text"
@@ -911,6 +943,10 @@ export function Home() {
                   {w.condition && <span className="muted">🏷 {formatCondition(w.condition)}</span>}
                 </div>
                 {w.version && <div className="muted" style={{ marginTop: 4 }}>Versão: {w.version}</div>}
+                {(w.state || w.city) && (
+                  <div className="muted">📍 {[w.city, w.state].filter(Boolean).join(' / ')}</div>
+                )}
+                <LastSearchChips lastSearch={w.lastSearch} />
                 {w.sellerType && <div className="muted">Anunciante: {formatSellerType(w.sellerType)}</div>}
                 {(w.clientName || w.seller) && (
                   <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -926,7 +962,7 @@ export function Home() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                 {w.searching && (
-                  <span className="schedule-chip" style={{ color: '#1d4ed8', background: '#dbeafe', borderColor: 'rgba(29,78,216,0.2)' }}>
+                  <span className="schedule-chip searching-chip">
                     ⏳ Buscando...
                   </span>
                 )}
@@ -962,7 +998,7 @@ export function Home() {
             textAlign: 'center',
             color: 'var(--muted)',
             fontSize: 14,
-            background: 'linear-gradient(145deg, #f8fdff, #f0f9ff)',
+            background: 'var(--empty-bg)',
             borderRadius: 20,
             border: '1.5px dashed rgba(8, 145, 178, 0.2)'
           }}>
@@ -991,7 +1027,7 @@ export function Home() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {boughtCars.map((w) => (
           <div key={w.id} className="card" style={{
-            background: 'linear-gradient(145deg, #faf5ff 0%, #f3e8ff 40%, #ffffff 100%)',
+            background: 'var(--bought-bg)',
             borderColor: 'rgba(124, 58, 237, 0.2)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -1037,7 +1073,7 @@ export function Home() {
             textAlign: 'center',
             color: 'var(--muted)',
             fontSize: 14,
-            background: 'linear-gradient(145deg, #faf5ff, #f3e8ff)',
+            background: 'var(--bought-empty-bg)',
             borderRadius: 20,
             border: '1.5px dashed rgba(124, 58, 237, 0.2)'
           }}>

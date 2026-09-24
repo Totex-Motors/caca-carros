@@ -15,6 +15,9 @@
   --border: rgba(8, 145, 178, 0.15);
   --text: #0c1a2e;
   --muted: #64748b;
+  --empty-bg: linear-gradient(145deg, #f8fdff, #f0f9ff);
+  --bought-bg: linear-gradient(145deg, #faf5ff 0%, #f3e8ff 40%, #ffffff 100%);
+  --bought-empty-bg: linear-gradient(145deg, #faf5ff, #f3e8ff);
 
   /* Claymorphism shadows */
   --clay-shadow-sm:
@@ -593,4 +596,10 @@ button:disabled {
   .title {
     font-size: 1.9rem;
   }
+}
+
+.searching-chip {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: rgba(29, 78, 216, 0.2);
 }

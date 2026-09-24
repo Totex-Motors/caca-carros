@@ -42,6 +42,8 @@ model WantedCar {
   clientPhone String?      @map("client_phone")
   seller     String?       
   sellerType WantedCarSellerType? @map("seller_type")
+  state      String?       // UF da busca (ex.: "SP"); null = padrao dos portais
+  city       String?       // cidade da busca; null = estado inteiro
   condition WantedCarCondition? @map("condition")
   yearFrom  Int             @map("year")
   yearTo    Int?            @map("year_to")

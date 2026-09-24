@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import type { Car, WantedCar, WantedCarCondition, WantedCarStatus } from '@prisma/client';
 import { prisma } from '../../../infra/database/prisma/client';
-import { getCarSearchSchedule, isWantedCarSearching, startImmediateSearch } from '../../../infra/jobs/car-search.job';
+import { getCarSearchSchedule, getLastSearch, isWantedCarSearching, startImmediateSearch, type LastSearch } from '../../../infra/jobs/car-search.job';
 import { getOrCreateDossie } from '../../../core/dossie/dossie.service';
 import type { ExternalCar } from '../../../core/cars/interfaces/car';
 import { mapExternalCarToCreateInput } from '../../../core/cars/mappers/external-car.mapper';
@@ -9,6 +9,7 @@ import { SearchCarService } from '../../../core/cars/services/search-car.service
 import { SearchMercadoLivreService } from '../../../core/cars/services/search-mercadolivre.service';
 import { SearchOlxService } from '../../../core/cars/services/search-olx.service';
 import { parseVehicleModelAndVersion } from '../../../core/cars/utils/vehicle-model-parser';
+import { canonicalBrandName } from '../../../core/cars/utils/brand-name';
 
 type CarDTO = {
   title: string;
@@ -42,6 +43,9 @@ type WantedCarDTO = {
   status: WantedCarStatus;
   createdAt: string;
   searching: boolean;
+  state: string | null;
+  city: string | null;
+  lastSearch: LastSearch | null;
   cars?: CarDTO[];
 };
 
@@ -152,6 +156,9 @@ function mapWantedToDto(wanted: WantedCar & { cars?: Car[] }): WantedCarDTO {
     status: wanted.status,
     createdAt: wanted.createdAt.toISOString(),
     searching: isWantedCarSearching(wanted.id),
+    state: wanted.state ?? null,
+    city: wanted.city ?? null,
+    lastSearch: getLastSearch(wanted.id),
     cars: wanted.cars ? wanted.cars.map(mapCarToDto) : undefined
   };
 }
@@ -180,7 +187,7 @@ export class SearchCarController {
   ) {}
 
   async createWanted(req: Request, res: Response): Promise<Response> {
-    const { brand, model, version, condition, sellerType, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo, clientName, clientPhone, seller } = req.body as {
+    const { brand, model, version, condition, sellerType, year, yearFrom, yearTo, maxPrice, mileageFrom, mileageTo, clientName, clientPhone, seller, state, city } = req.body as {
       brand?: unknown;
       model?: unknown;
       version?: unknown;
@@ -195,6 +202,8 @@ export class SearchCarController {
       clientName?: unknown;
       clientPhone?: unknown;
       seller?: unknown;
+      state?: unknown;
+      city?: unknown;
     };
 
     if (typeof brand !== 'string' || typeof model !== 'string') {
@@ -277,6 +286,12 @@ export class SearchCarController {
       ? sanitizePhone(clientPhone)
       : null;
 
+    const resolvedState = typeof state === 'string' && state.trim() !== '' ? state.trim().toUpperCase() : null;
+    if (resolvedState !== null && !/^[A-Z]{2}$/.test(resolvedState)) {
+      return res.status(400).json({ message: 'state must be a two-letter UF when provided' });
+    }
+    const resolvedCity = typeof city === 'string' && city.trim() !== '' ? city.trim().slice(0, 80) : null;
+
      const wanted = await prisma.wantedCar.create({
       data: {
         brand: brand.trim(),
@@ -292,6 +307,8 @@ export class SearchCarController {
         mileageFrom: hasMileage ? (mileageFromNumber as number) : null,
         mileageTo: hasMileage ? (mileageToNumber as number) : null,
         maxPrice: resolvedMaxPrice,
+        state: resolvedState,
+        city: resolvedCity,
         status: 'PENDING'
       }
     });
@@ -365,12 +382,12 @@ export class SearchCarController {
       return res.status(500).json({ message: 'APIFY_TOKEN nao configurado.' });
     }
 
-    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : null;
-    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
+    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : wanted.city ?? null;
+    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : wanted.state ?? null;
 
     try {
       const results = await this.searchService.execute({
-        brand: wanted.brand,
+        brand: canonicalBrandName(wanted.brand),
         model: wanted.model,
         version: wanted.version ?? null,
         condition: wanted.condition,
@@ -434,14 +451,14 @@ export class SearchCarController {
       return res.status(409).json({ message: 'Esse carro já saiu da fila de busca.' });
     }
 
-    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : null;
-    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
+    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : wanted.city ?? null;
+    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : wanted.state ?? null;
 
     try {
       const debugEnabled = isOlxDebugEnabled();
       const searchResponse = debugEnabled
         ? await this.searchOlxService.executeWithDebug({
-          brand: wanted.brand,
+          brand: canonicalBrandName(wanted.brand),
           model: wanted.model,
           version: wanted.version ?? null,
           condition: wanted.condition,
@@ -455,7 +472,7 @@ export class SearchCarController {
           state: resolvedState
         })
         : { results: await this.searchOlxService.execute({
-          brand: wanted.brand,
+          brand: canonicalBrandName(wanted.brand),
           model: wanted.model,
           version: wanted.version ?? null,
           condition: wanted.condition,
@@ -527,11 +544,11 @@ export class SearchCarController {
       return res.status(409).json({ message: 'Esse carro já saiu da fila de busca.' });
     }
 
-    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : null;
-    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : null;
+    const resolvedCity = typeof city === 'string' && city.trim().length > 0 ? city.trim() : wanted.city ?? null;
+    const resolvedState = typeof state === 'string' && state.trim().length > 0 ? state.trim() : wanted.state ?? null;
 
     const searchParams = {
-      brand: wanted.brand,
+      brand: canonicalBrandName(wanted.brand),
       model: wanted.model,
       version: wanted.version ?? null,
       condition: wanted.condition,

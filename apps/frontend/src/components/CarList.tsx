@@ -14,7 +14,7 @@ export function CarList(props: { cars: CarDTO[] }) {
         textAlign: 'center',
         color: 'var(--muted)',
         fontSize: 14,
-        background: 'linear-gradient(145deg, #f8fdff, #f0f9ff)',
+        background: 'var(--empty-bg)',
         borderRadius: 18,
         border: '1.5px dashed rgba(8, 145, 178, 0.2)'
       }}>
@@ -51,7 +51,7 @@ export function CarList(props: { cars: CarDTO[] }) {
                   height: 76,
                   borderRadius: 14,
                   border: '1.5px dashed rgba(8, 145, 178, 0.2)',
-                  background: 'linear-gradient(145deg, #f0f9ff, #e0f7fa)',
+                  background: 'var(--empty-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

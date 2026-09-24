@@ -22,7 +22,18 @@ export type WantedCarDTO = {
   status: WantedCarStatus;
   createdAt: string;
   searching: boolean;
+  state?: string | null;
+  city?: string | null;
+  lastSearch?: LastSearchDTO | null;
   cars?: CarDTO[];
+};
+
+export type PortalSearchStatus = 'ok' | 'vazio' | 'erro' | 'nao_configurado';
+
+// Resultado da ultima busca automatica, por portal (fica em memoria no servidor).
+export type LastSearchDTO = {
+  finishedAt: string;
+  portais: Record<string, { status: PortalSearchStatus; count?: number; mensagem?: string }>;
 };
 
 export type CarDTO = {
