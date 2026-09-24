@@ -19,21 +19,22 @@ if [ "${#TOKEN}" -lt 20 ]; then
 fi
 
 echo "Testando o token..."
-ME=$(curl -s -w '\n%{http_code}' https://api.apify.com/v2/users/me -H "Authorization: Bearer $TOKEN")
+ME=$(curl -s -w '\n%{http_code}' https://api.apify.com/v2/users/me -H "Authorization: Bearer $TOKEN" || true)
 STATUS=$(printf '%s' "$ME" | tail -n1)
 if [ "$STATUS" != "200" ]; then
   echo "A Apify recusou o token (HTTP $STATUS). Copie de novo em Console > Settings > API & Integrations." >&2
   echo "Nada foi alterado." >&2
   exit 1
 fi
-USERNAME=$(printf '%s' "$ME" | head -n -1 | grep -o '"username":"[^"]*"' | head -1 | cut -d'"' -f4)
+# "|| true": sem o nome na resposta o script segue (com set -e, um grep sem resultado encerrava tudo em silencio).
+USERNAME=$(printf '%s' "$ME" | head -n -1 | grep -o '"username"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/' || true)
 echo "Token OK (conta: ${USERNAME:-?})."
 
 DEFAULT_ACTOR="${USERNAME:-usuario}/caca-carros-scraper"
 read -rp "Actor de busca [$DEFAULT_ACTOR]: " ACTOR </dev/tty
 ACTOR=$(printf '%s' "${ACTOR:-$DEFAULT_ACTOR}" | tr -d '[:space:]')
 ACTOR_PATH=$(printf '%s' "$ACTOR" | sed 's#/#~#')
-ACT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.apify.com/v2/acts/$ACTOR_PATH" -H "Authorization: Bearer $TOKEN")
+ACT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.apify.com/v2/acts/$ACTOR_PATH" -H "Authorization: Bearer $TOKEN" || true)
 if [ "$ACT_STATUS" != "200" ]; then
   echo "Nao achei o Actor \"$ACTOR\" nesta conta (HTTP $ACT_STATUS). Confira o nome em Console > Actors." >&2
   echo "Nada foi alterado." >&2
