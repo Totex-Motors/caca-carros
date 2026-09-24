@@ -5,6 +5,10 @@ import { App } from './App';
 
 import './styles/global.css';
 import './styles/dossie.css';
+import './styles/dark.css';
+import { aplicarTema, temaAtual } from './services/theme';
+
+aplicarTema(temaAtual());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

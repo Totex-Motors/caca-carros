@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnaliseView } from '../components/AnaliseView';
+import { BuscarOfertas } from '../components/BuscarOfertas';
 import { DossieView } from '../components/DossieView';
 import { TopNav } from '../components/TopNav';
 import type { Analise, Dossie } from '../services/dossie-types';
@@ -77,7 +78,7 @@ export function Consulta() {
   const [extensao, setExtensao] = useState<string | null>(null);
   const [etapaExtensao, setEtapaExtensao] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const autoRun = useRef(false);
+  const ultimoAuto = useRef<string | null>(null);
 
   useEffect(() => {
     if (!localStorage.getItem('token')) navigate('/login');
@@ -137,19 +138,20 @@ export function Consulta() {
     }
   }
 
-  // Vindo do modo Completo: /consulta?url=<anuncio> ou /consulta?q=<modelo ano> ja dispara a consulta.
+  // Vindo de outro lugar (?url=<anuncio> ou ?q=<modelo ano>): dispara a consulta. Reage tambem a navegacao dentro
+  // desta pagina (ex.: botao "Analisar" do comparativo).
   useEffect(() => {
-    if (autoRun.current) return;
-    const url = params.get('url');
-    const q = params.get('q');
-    const valor = url ?? q;
-    if (!valor) return;
-    autoRun.current = true;
+    const valor = params.get('url') ?? params.get('q');
+    if (!valor || ultimoAuto.current === valor) return;
+    ultimoAuto.current = valor;
     setEntrada(valor);
+    setTexto('');
+    setFotos([]);
     setParams({}, { replace: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     executar(valor, { texto: '', fotos: [] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [params]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -264,9 +266,33 @@ export function Consulta() {
 
       <div style={{ marginTop: 20 }}>
         {loading && <Loading etapas={etapaExtensao ? [etapaExtensao] : loading === 'analise' ? ETAPAS_ANALISE : ETAPAS_DOSSIE} />}
-        {!loading && resultado?.tipo === 'dossie' && <DossieView dossie={resultado.dossie} />}
+        {!loading && resultado?.tipo === 'dossie' && (
+          <div className="dx">
+            <DossieView dossie={resultado.dossie} />
+            <BuscarOfertas
+              key={resultado.dossie.id}
+              marca={resultado.dossie.dados.veiculo.marca}
+              modelo={resultado.dossie.dados.veiculo.modelo}
+              ano={resultado.dossie.dados.veiculo.ano}
+              fipe={resultado.dossie.fipe?.faixa ?? null}
+              uf={uf}
+            />
+          </div>
+        )}
         {!loading && resultado?.tipo === 'analise' && (
-          <AnaliseView analise={resultado.analise} fotosEnviadas={resultado.fotosEnviadas} />
+          <div className="dx">
+            <AnaliseView analise={resultado.analise} fotosEnviadas={resultado.fotosEnviadas} />
+            {resultado.analise.identificacao.marca && resultado.analise.identificacao.modelo && resultado.analise.identificacao.ano_modelo && (
+              <BuscarOfertas
+                key={resultado.analise.id}
+                marca={resultado.analise.identificacao.marca}
+                modelo={resultado.analise.identificacao.modelo}
+                ano={resultado.analise.identificacao.ano_modelo}
+                fipe={resultado.analise.fipe?.faixa ?? null}
+                uf={uf}
+              />
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -360,7 +360,7 @@ export function WantedCarDetailsModal({
                 textAlign: 'center',
                 color: 'var(--muted)',
                 fontSize: 14,
-                background: 'linear-gradient(145deg, #f8fdff, #f0f9ff)',
+                background: 'var(--empty-bg)',
                 borderRadius: 18,
                 border: '1.5px dashed rgba(8, 145, 178, 0.2)'
               }}>

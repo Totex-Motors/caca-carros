@@ -5,6 +5,7 @@ import { prisma } from '../database/prisma/client';
 import { mapExternalCarToCreateInput } from '../../core/cars/mappers/external-car.mapper';
 import type { ExternalCar } from '../../core/cars/interfaces/car';
 import { SearchCarService } from '../../core/cars/services/search-car.service';
+import { canonicalBrandName } from '../../core/cars/utils/brand-name';
 import { SearchMercadoLivreService } from '../../core/cars/services/search-mercadolivre.service';
 import { SearchOlxService } from '../../core/cars/services/search-olx.service';
 
@@ -93,17 +94,38 @@ function getServices() {
   return services;
 }
 
+type PortalStatus = { status: 'ok' | 'vazio' | 'erro' | 'nao_configurado'; count?: number; mensagem?: string };
+export type LastSearch = { finishedAt: string; portais: Record<string, PortalStatus> };
+
+// Resultado da ultima busca de cada carro, para o site mostrar por que nada apareceu (fica so em memoria).
+const lastSearchByWanted = new Map<string, LastSearch>();
+
+export function getLastSearch(wantedId: string): LastSearch | null {
+  return lastSearchByWanted.get(wantedId) ?? null;
+}
+
+// Erros de configuracao conhecidos dos provedores (sem chave/proxy): viram uma mensagem clara no site.
+function describeError(err: unknown): PortalStatus {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/APIFY_TOKEN|PROXY_(HOST|USER|PASS|PORT)/.test(message)) {
+    const falta = message.includes('APIFY') ? 'chave da Apify (APIFY_TOKEN)' : 'proxy (PROXY_HOST/USER/PASS/PORT)';
+    return { status: 'nao_configurado', mensagem: `Falta configurar ${falta} no servidor.` };
+  }
+  // Nunca expoe usuario/senha do proxy que alguns erros trazem na URL.
+  return { status: 'erro', mensagem: message.replace(/\/\/[^@\s]+@/g, '//***@').slice(0, 160) };
+}
+
 async function searchAndSave(
   wanted: WantedCar,
   portalName: string,
   searchFn: () => Promise<ExternalCar[]>
-): Promise<void> {
+): Promise<PortalStatus> {
   try {
     const raw = await searchFn();
     const unique = dedupeResults(raw);
     if (unique.length === 0) {
       console.info(`[car-search.job] ${portalName} no results`, { wantedCarId: wanted.id });
-      return;
+      return { status: 'vazio', count: 0 };
     }
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.car.createMany({
@@ -113,8 +135,10 @@ async function searchAndSave(
       await tx.wantedCar.update({ where: { id: wanted.id }, data: { status: 'FOUND' } });
     });
     console.info(`[car-search.job] ${portalName} saved`, { wantedCarId: wanted.id, count: unique.length });
+    return { status: 'ok', count: unique.length };
   } catch (err) {
     console.error(`[car-search.job] ${portalName} failed`, err);
+    return describeError(err);
   }
 }
 
@@ -127,7 +151,7 @@ export async function searchWantedCar(wanted: WantedCar): Promise<void> {
 
   const { webmotors, mercadoLivre, olx } = getServices();
   const params = {
-    brand: wanted.brand,
+    brand: canonicalBrandName(wanted.brand),
     model: wanted.model,
     version: wanted.version ?? null,
     condition: wanted.condition,
@@ -137,17 +161,21 @@ export async function searchWantedCar(wanted: WantedCar): Promise<void> {
     mileageFrom: wanted.mileageFrom,
     mileageTo: wanted.mileageTo,
     maxPrice: wanted.maxPrice,
-    city: null,
-    state: null
+    city: wanted.city ?? null,
+    state: wanted.state ?? null
   };
 
   searchingWantedIds.add(wanted.id);
   try {
-    await Promise.all([
+    const [webmotorsStatus, mercadoLivreStatus, olxStatus] = await Promise.all([
       searchAndSave(wanted, 'webmotors', () => webmotors.execute(params)),
       searchAndSave(wanted, 'mercadolivre', () => mercadoLivre.execute(params)),
       searchAndSave(wanted, 'olx', () => olx.execute(params))
     ]);
+    lastSearchByWanted.set(wanted.id, {
+      finishedAt: new Date().toISOString(),
+      portais: { Webmotors: webmotorsStatus, 'Mercado Livre': mercadoLivreStatus, OLX: olxStatus }
+    });
   } finally {
     searchingWantedIds.delete(wanted.id);
   }
