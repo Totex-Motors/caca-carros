@@ -14,6 +14,7 @@ import {
   saveUf,
   UFS
 } from '../services/dossie';
+import { capturarComExtensao, detectarExtensao } from '../services/extensao';
 
 const MAX_FOTOS = 8;
 
@@ -53,7 +54,7 @@ function Loading({ etapas }: { etapas: string[] }) {
     <div className="card loading-steps">
       <div className="spinner" />
       <div>
-        <strong>{etapas[etapa]}</strong>
+        <strong>{etapas[Math.min(etapa, etapas.length - 1)]}</strong>
         <div className="dx-muted" style={{ fontSize: 13 }}>
           Uma análise nova leva de 1 a 3 minutos. Dossiês que já estão no acervo abrem na hora.
         </div>
@@ -73,12 +74,18 @@ export function Consulta() {
   const [loading, setLoading] = useState<null | 'dossie' | 'analise'>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [extensao, setExtensao] = useState<string | null>(null);
+  const [etapaExtensao, setEtapaExtensao] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const autoRun = useRef(false);
 
   useEffect(() => {
     if (!localStorage.getItem('token')) navigate('/login');
   }, [navigate]);
+
+  useEffect(() => {
+    detectarExtensao().then(setExtensao);
+  }, []);
 
   async function executar(valor: string, opts: { texto: string; fotos: string[] }) {
     const alvo = valor.trim();
@@ -90,21 +97,43 @@ export function Consulta() {
     setLoading(analisar ? 'analise' : 'dossie');
     try {
       if (analisar) {
+        let texto = opts.texto.trim() || (!isUrl(alvo) ? alvo : '');
+        let fotosEnvio = opts.fotos;
+        // Com a extensao, o anuncio e lido no navegador do usuario (com o login dele no portal, sem bloqueio).
+        const versaoExtensao = extensao ?? (isUrl(alvo) ? await detectarExtensao() : null);
+        if (isUrl(alvo) && !texto && versaoExtensao) {
+          setEtapaExtensao('Abrindo o anúncio no seu navegador (aba em segundo plano)…');
+          const captura = await capturarComExtensao(alvo);
+          texto = `${captura.titulo}\n${captura.texto}`.trim();
+          fotosEnvio = [...opts.fotos, ...captura.fotos].slice(0, MAX_FOTOS);
+          setEtapaExtensao(null);
+        }
         const analise = await fetchAnalise({
           url: isUrl(alvo) ? alvo : undefined,
-          texto: opts.texto.trim() || (!isUrl(alvo) ? alvo : undefined),
-          fotos: opts.fotos,
+          texto: texto || undefined,
+          fotos: fotosEnvio,
           uf
         });
-        setResultado({ tipo: 'analise', analise, fotosEnviadas: opts.fotos });
+        setResultado({ tipo: 'analise', analise, fotosEnviadas: fotosEnvio });
       } else {
         setResultado({ tipo: 'dossie', dossie: await fetchDossie(alvo, uf) });
       }
     } catch (error) {
-      if (isBlockedError(error)) setMostrarTexto(true);
-      setErro(apiErrorMessage(error, 'Não foi possível concluir agora. Tente novamente em instantes.'));
+      if (isBlockedError(error)) {
+        setMostrarTexto(true);
+        setErro(
+          'O portal bloqueou a leitura pelo servidor. Instale a extensão AutoExpert AI para ler pelo seu navegador, ' +
+            'ou cole o texto do anúncio e envie as fotos.'
+        );
+      } else if (error instanceof Error && !('isAxiosError' in error)) {
+        setMostrarTexto(true);
+        setErro(error.message);
+      } else {
+        setErro(apiErrorMessage(error, 'Não foi possível concluir agora. Tente novamente em instantes.'));
+      }
     } finally {
       setLoading(null);
+      setEtapaExtensao(null);
     }
   }
 
@@ -166,6 +195,11 @@ export function Consulta() {
           aria-label="Modelo e ano, ou link do anúncio"
         />
         <div className="consulta-help">
+          {isUrl(entrada) && (
+            <strong style={{ color: extensao ? 'var(--success)' : 'var(--muted)' }}>
+              {extensao ? '🧩 Extensão ativa: o anúncio será lido pelo seu navegador. ' : '🧩 Sem extensão: o servidor tenta ler o link. '}
+            </strong>
+          )}
           {modoAnalise
             ? '🔍 Análise de anúncio: preço x FIPE, quilometragem pelas fotos, divergências e sinais de golpe + dossiê do modelo.'
             : '📘 Dossiê técnico do modelo: mecânica, defeitos crônicos, custos, FIPE e IPVA.'}
@@ -229,7 +263,7 @@ export function Consulta() {
       </form>
 
       <div style={{ marginTop: 20 }}>
-        {loading && <Loading etapas={loading === 'analise' ? ETAPAS_ANALISE : ETAPAS_DOSSIE} />}
+        {loading && <Loading etapas={etapaExtensao ? [etapaExtensao] : loading === 'analise' ? ETAPAS_ANALISE : ETAPAS_DOSSIE} />}
         {!loading && resultado?.tipo === 'dossie' && <DossieView dossie={resultado.dossie} />}
         {!loading && resultado?.tipo === 'analise' && (
           <AnaliseView analise={resultado.analise} fotosEnviadas={resultado.fotosEnviadas} />

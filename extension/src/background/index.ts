@@ -1,5 +1,14 @@
 import { apiUrl, getConfig, setConfig } from '../shared/config';
-import { PORTA_ANALISE, type PedidoAnalise, type RespostaAnalise } from '../shared/messages';
+import {
+  PORTA_ANALISE,
+  PORTA_CAPTURA,
+  type Captura,
+  type PedidoAnalise,
+  type PedidoCaptura,
+  type PedidoCapturaAba,
+  type RespostaAnalise,
+  type RespostaCaptura
+} from '../shared/messages';
 import type { Analise } from '../shared/types';
 
 // Service worker: recebe a captura do anuncio, baixa e reduz as fotos e envia para o servidor do caca-carros,
@@ -88,5 +97,91 @@ chrome.runtime.onConnect.addListener((port) => {
           : 'Não foi possível falar com o servidor do caça-carros. Confira o endereço nas configurações da extensão.'
       });
     });
+  });
+});
+
+// ---- Ponte com o site: abrir o anuncio numa aba em segundo plano e ler com o login do proprio usuario ----
+
+function esperarCarregar(tabId: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(ouvir);
+      reject(new Error('timeout'));
+    }, timeoutMs);
+    function ouvir(id: number, info: chrome.tabs.OnUpdatedInfo) {
+      if (id !== tabId || info.status !== 'complete') return;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(ouvir);
+      resolve();
+    }
+    chrome.tabs.onUpdated.addListener(ouvir);
+  });
+}
+
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function capturarAba(tabId: number): Promise<Captura> {
+  // Portais montam a pagina com JavaScript depois do "complete": tenta algumas vezes ate ter texto e fotos.
+  let ultima: Captura | null = null;
+  for (let tentativa = 0; tentativa < 8; tentativa++) {
+    await esperar(tentativa === 0 ? 2_500 : 1_500);
+    try {
+      const captura = (await chrome.tabs.sendMessage(tabId, { type: 'CAPTURAR_PAGINA' } satisfies PedidoCapturaAba)) as Captura | undefined;
+      if (captura) {
+        ultima = captura;
+        if (captura.texto.length > 800 && captura.fotos.length >= 3) return captura;
+      }
+    } catch {
+      // content script ainda nao carregou
+    }
+  }
+  if (ultima) return ultima;
+  throw new Error('sem-content-script');
+}
+
+async function capturarUrl(url: string): Promise<RespostaCaptura> {
+  let alvo: URL;
+  try {
+    alvo = new URL(url);
+  } catch {
+    return { type: 'CAPTURA_ERRO', mensagem: 'Link inválido.' };
+  }
+  if (alvo.protocol !== 'https:' && alvo.protocol !== 'http:') return { type: 'CAPTURA_ERRO', mensagem: 'Link inválido.' };
+
+  const aba = await chrome.tabs.create({ url: alvo.toString(), active: false });
+  if (aba.id === undefined) return { type: 'CAPTURA_ERRO', mensagem: 'Não foi possível abrir o anúncio.' };
+  try {
+    await esperarCarregar(aba.id, 45_000).catch(() => undefined);
+    const captura = await capturarAba(aba.id);
+    const fotos = (await Promise.all(captura.fotos.slice(0, MAX_FOTOS * 2).map(fotoParaDataUrl)))
+      .filter((f): f is string => f !== null)
+      .slice(0, MAX_FOTOS);
+    return { type: 'CAPTURA_OK', captura, fotos };
+  } catch (err) {
+    const semScript = err instanceof Error && err.message === 'sem-content-script';
+    return {
+      type: 'CAPTURA_ERRO',
+      mensagem: semScript
+        ? 'A extensão ainda não lê este portal. Abra o anúncio e use "Colar texto" e "Fotos".'
+        : 'Não foi possível ler o anúncio no seu navegador.'
+    };
+  } finally {
+    chrome.tabs.remove(aba.id).catch(() => undefined);
+  }
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== PORTA_CAPTURA) return;
+  port.onMessage.addListener((msg: PedidoCaptura) => {
+    if (msg.type !== 'CAPTURAR_URL') return;
+    capturarUrl(msg.url)
+      .catch((): RespostaCaptura => ({ type: 'CAPTURA_ERRO', mensagem: 'Não foi possível ler o anúncio no seu navegador.' }))
+      .then((resposta) => {
+        try {
+          port.postMessage(resposta);
+        } catch {
+          // a pagina do caca-carros foi fechada
+        }
+      });
   });
 });

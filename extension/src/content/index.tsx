@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import styles from '../styles.css?inline';
 import { getConfig, DEFAULT_API_BASE } from '../shared/config';
-import { PORTA_ANALISE, type PedidoAnalise, type RespostaAnalise } from '../shared/messages';
+import { PORTA_ANALISE, type PedidoAnalise, type PedidoCapturaAba, type RespostaAnalise } from '../shared/messages';
 import { capturarAnuncio, detectarPortal } from './capture';
 import { Drawer, type Estado } from './Drawer';
 
@@ -71,6 +71,12 @@ function App() {
     </>
   );
 }
+
+// Pedido do service worker quando o site do caca-carros manda ler este anuncio numa aba em segundo plano.
+chrome.runtime.onMessage.addListener((msg: PedidoCapturaAba, _sender, sendResponse) => {
+  if (msg?.type !== 'CAPTURAR_PAGINA') return;
+  sendResponse(capturarAnuncio());
+});
 
 const host = document.createElement('div');
 host.id = 'autoexpert-ai-root';

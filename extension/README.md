@@ -8,6 +8,9 @@ que faz a vistoria com IA: preço x FIPE, km pelas fotos, divergências, funilar
 - Captura híbrida: dados estruturados (JSON-LD) e Open Graph quando existem, texto visível da página como fallback
   universal (a IA separa preço, km, versão e descrição) e as fotos grandes da galeria (até 8, reduzidas para 1280 px).
 - Interface em Shadow DOM: o CSS do portal não interfere no painel e vice-versa.
+- **Ponte com o site:** com a extensão instalada, colar um link em `carros.grupocardoso.online/consulta` (ou clicar em
+  "Analisar" num anúncio encontrado) faz a extensão abrir o anúncio numa aba em segundo plano, com o seu login no
+  portal, ler texto e fotos e fechar a aba. Assim os portais não bloqueiam a leitura.
 
 ## Instalar (modo desenvolvedor)
 
@@ -32,3 +35,4 @@ que faz a vistoria com IA: preço x FIPE, km pelas fotos, divergências, funilar
 | `src/content/Drawer.tsx` | Painel lateral com o resultado |
 | `src/background/index.ts` | Baixa e reduz as fotos, chama `POST /api/dossie/analise` |
 | `src/popup/main.tsx` | Login e estado para o IPVA |
+| `src/bridge/index.ts` | Ponte com o site do caça-carros (`window.postMessage`) |
