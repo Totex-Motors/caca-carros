@@ -28,7 +28,7 @@ export type WantedCarDTO = {
   cars?: CarDTO[];
 };
 
-export type PortalSearchStatus = 'ok' | 'vazio' | 'erro' | 'nao_configurado';
+export type PortalSearchStatus = 'ok' | 'vazio' | 'erro' | 'bloqueado' | 'nao_configurado';
 
 // Resultado da ultima busca automatica, por portal (fica em memoria no servidor).
 export type LastSearchDTO = {

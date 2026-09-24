@@ -531,5 +531,6 @@ textarea.consulta-texto:focus {
 
 .search-chip.ok { color: #166534; background: var(--success-light); }
 .search-chip.vazio { color: var(--muted); background: var(--surface-soft); }
-.search-chip.erro { color: #92400e; background: #fef3c7; }
+.search-chip.erro,
+.search-chip.bloqueado { color: #92400e; background: #fef3c7; }
 .search-chip.nao_configurado { color: #991b1b; background: var(--danger-light); }

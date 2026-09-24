@@ -8,6 +8,7 @@ import { SearchCarService } from '../../core/cars/services/search-car.service';
 import { canonicalBrandName } from '../../core/cars/utils/brand-name';
 import { SearchMercadoLivreService } from '../../core/cars/services/search-mercadolivre.service';
 import { SearchOlxService } from '../../core/cars/services/search-olx.service';
+import { isScraperActorConfigured, runScraperActor, type ScraperResult } from '../providers/caca-scraper/caca-scraper.provider';
 
 function isExternalSearchEnabled(): boolean {
   const flag = process.env.EXTERNAL_SEARCH_ENABLED ?? 'false';
@@ -94,7 +95,7 @@ function getServices() {
   return services;
 }
 
-type PortalStatus = { status: 'ok' | 'vazio' | 'erro' | 'nao_configurado'; count?: number; mensagem?: string };
+type PortalStatus = { status: 'ok' | 'vazio' | 'erro' | 'bloqueado' | 'nao_configurado'; count?: number; mensagem?: string };
 export type LastSearch = { finishedAt: string; portais: Record<string, PortalStatus> };
 
 // Resultado da ultima busca de cada carro, para o site mostrar por que nada apareceu (fica so em memoria).
@@ -107,8 +108,8 @@ export function getLastSearch(wantedId: string): LastSearch | null {
 // Erros de configuracao conhecidos dos provedores (sem chave/proxy): viram uma mensagem clara no site.
 function describeError(err: unknown): PortalStatus {
   const message = err instanceof Error ? err.message : String(err);
-  if (/APIFY_TOKEN|PROXY_(HOST|USER|PASS|PORT)/.test(message)) {
-    const falta = message.includes('APIFY') ? 'chave da Apify (APIFY_TOKEN)' : 'proxy (PROXY_HOST/USER/PASS/PORT)';
+  if (/APIFY_TOKEN is required|sao obrigatorios|PROXY_(HOST|USER|PASS|PORT)/.test(message)) {
+    const falta = message.includes('APIFY') ? 'a Apify (APIFY_TOKEN e APIFY_SCRAPER_ACTOR_ID)' : 'proxy (PROXY_HOST/USER/PASS/PORT)';
     return { status: 'nao_configurado', mensagem: `Falta configurar ${falta} no servidor.` };
   }
   // Nunca expoe usuario/senha do proxy que alguns erros trazem na URL.
@@ -167,6 +168,10 @@ export async function searchWantedCar(wanted: WantedCar): Promise<void> {
 
   searchingWantedIds.add(wanted.id);
   try {
+    if (isScraperActorConfigured()) {
+      await searchWithActor(wanted, params);
+      return;
+    }
     const [webmotorsStatus, mercadoLivreStatus, olxStatus] = await Promise.all([
       searchAndSave(wanted, 'webmotors', () => webmotors.execute(params)),
       searchAndSave(wanted, 'mercadolivre', () => mercadoLivre.execute(params)),
@@ -179,6 +184,39 @@ export async function searchWantedCar(wanted: WantedCar): Promise<void> {
   } finally {
     searchingWantedIds.delete(wanted.id);
   }
+}
+
+const PORTAL_NAMES = { webmotors: 'Webmotors', mercadolivre: 'Mercado Livre', olx: 'OLX' } as const;
+
+/** Uma execucao do Actor proprio da Apify busca os tres portais; cada portal e salvo e reportado separadamente. */
+async function searchWithActor(wanted: WantedCar, params: Parameters<typeof runScraperActor>[0]): Promise<void> {
+  let result: ScraperResult;
+  try {
+    result = await runScraperActor(params);
+  } catch (err) {
+    const status = describeError(err);
+    lastSearchByWanted.set(wanted.id, {
+      finishedAt: new Date().toISOString(),
+      portais: { Webmotors: status, 'Mercado Livre': status, OLX: status }
+    });
+    console.error('[car-search.job] apify actor failed', { wantedCarId: wanted.id, err });
+    return;
+  }
+
+  const portais: Record<string, PortalStatus> = {};
+  for (const portal of ['webmotors', 'mercadolivre', 'olx'] as const) {
+    const report = result.reports[portal];
+    if (result.cars[portal].length === 0 && report.status === 'bloqueado') {
+      portais[PORTAL_NAMES[portal]] = { status: 'bloqueado', mensagem: 'O portal bloqueou a busca nesta rodada; será tentado de novo na próxima.' };
+      continue;
+    }
+    if (result.cars[portal].length === 0 && report.status === 'erro') {
+      portais[PORTAL_NAMES[portal]] = { status: 'erro', mensagem: (report.error ?? 'falha na leitura').slice(0, 160) };
+      continue;
+    }
+    portais[PORTAL_NAMES[portal]] = await searchAndSave(wanted, portal, async () => result.cars[portal]);
+  }
+  lastSearchByWanted.set(wanted.id, { finishedAt: new Date().toISOString(), portais });
 }
 
 /**
