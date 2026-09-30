@@ -110,6 +110,27 @@ export type Dossie = {
 
 export type CategoriaAlerta = 'golpe' | 'km' | 'preco' | 'divergencia' | 'estrutura' | 'mecanica' | 'documentacao' | 'outro';
 
+export type VerificacaoFunilaria =
+  | 'tom_e_brilho'
+  | 'textura_casca_laranja'
+  | 'nevoa_em_borrachas_e_frisos'
+  | 'vaos_e_alinhamento'
+  | 'farois_e_lanternas'
+  | 'parafusos_e_fixacoes'
+  | 'soleiras_e_parte_baixa'
+  | 'vidros_e_gravacoes'
+  | 'etiquetas_e_adesivos'
+  | 'sinais_de_enchente';
+
+export type ResultadoFunilaria = 'sem_sinais' | 'suspeito' | 'evidente' | 'nao_avaliavel';
+
+export type Funilaria = {
+  avaliacao: 'sem_sinais' | 'sinais_leves' | 'sinais_fortes' | 'sem_evidencia';
+  resumo: string;
+  verificacoes: { item: VerificacaoFunilaria; resultado: ResultadoFunilaria; pecas: string[]; evidencia: string }[];
+  areas_sem_foto: string[];
+};
+
 export type AnaliseIA = {
   resumo: string;
   score_confianca: number;
@@ -123,6 +144,8 @@ export type AnaliseIA = {
   };
   alertas: { categoria: CategoriaAlerta; gravidade: Gravidade; titulo: string; evidencia: string; como_verificar: string }[];
   pontos_positivos: string[];
+  // Ausente em analises salvas antes desta versao.
+  funilaria?: Funilaria;
   fotos: { foto: number; observacao: string }[];
   perguntas_ao_vendedor: string[];
   checklist_vistoria: string[];

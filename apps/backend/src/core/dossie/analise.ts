@@ -17,6 +17,20 @@ export { AnuncioBloqueadoError };
 
 const GRAVIDADE = { type: 'string', enum: ['baixa', 'media', 'alta', 'critica'] };
 
+// Itens fixos da vistoria de funilaria: a IA responde cada um (em sincronia com VERIFICACAO_FUNILARIA no frontend).
+const VERIFICACOES_FUNILARIA = [
+  'tom_e_brilho',
+  'textura_casca_laranja',
+  'nevoa_em_borrachas_e_frisos',
+  'vaos_e_alinhamento',
+  'farois_e_lanternas',
+  'parafusos_e_fixacoes',
+  'soleiras_e_parte_baixa',
+  'vidros_e_gravacoes',
+  'etiquetas_e_adesivos',
+  'sinais_de_enchente'
+];
+
 const IDENTIFICACAO_SCHEMA = obj({
   marca: nullable(str('Marca como usada no Brasil, ex.: "Jeep", "Chevrolet".')),
   modelo: nullable(str('Modelo sem versao, ex.: "Compass", "Onix".')),
@@ -54,6 +68,20 @@ const ANALISE_SCHEMA = obj({
     'Do mais grave ao menos grave. Somente com evidencia no texto ou nas fotos.'
   ),
   pontos_positivos: arr(str('Somente com evidencia (ex.: "foto 5: pneus com sulco aparente e mesma marca").')),
+  funilaria: obj({
+    avaliacao: { type: 'string', enum: ['sem_sinais', 'sinais_leves', 'sinais_fortes', 'sem_evidencia'] },
+    resumo: str('1 a 3 frases: o que as fotos permitem concluir sobre repintura, batida ou peca trocada.'),
+    verificacoes: arr(
+      obj({
+        item: { type: 'string', enum: VERIFICACOES_FUNILARIA },
+        resultado: { type: 'string', enum: ['sem_sinais', 'suspeito', 'evidente', 'nao_avaliavel'] },
+        pecas: arr(str('Peca e lado afetados, ex.: "porta traseira esquerda". Vazio se nao houver.')),
+        evidencia: str('O que foi visto e em qual foto. "Nao avaliavel: sem foto da area" quando for o caso.')
+      }),
+      'Uma entrada para CADA item da lista, sempre, mesmo que nao avaliavel.'
+    ),
+    areas_sem_foto: arr(str('Areas do carro que o anuncio nao mostra e que precisam ser vistas pessoalmente.'))
+  }, 'Vistoria de funilaria e pintura pelas fotos, item a item.'),
   fotos: arr(obj({ foto: num('Numero da foto, a partir de 1.'), observacao: str() })),
   perguntas_ao_vendedor: arr(str()),
   checklist_vistoria: arr(str('Itens para conferir no carro, priorizando os defeitos cronicos do modelo.')),
@@ -71,14 +99,36 @@ VERIFIQUE
    so fala por mensagem, pressa, texto generico ou copiado, fotos de carros diferentes (cor, rodas, placa ou interior
    mudando entre fotos), fotos de catalogo, placa escondida em todas as fotos, anuncio de loja com preco de particular.
 3. Divergencias: ano/versao anunciados x itens visiveis (rodas, farois, lanternas, central, painel, bancos).
-4. Estrutura: diferenca de tonalidade entre pecas, frestas irregulares, parafusos de paralama/capo mexidos,
-   solda ou massa aparente, farol novo de um lado so, sinais de enchente (oxidacao, barro no carpete).
+4. Funilaria e pintura (preencha "funilaria", um resultado para CADA item):
+   - tom_e_brilho: compare pecas vizinhas sob a MESMA luz (porta x paralama, capo x paralama, tampa x lateral).
+     Cor ou brilho diferente entre pecas adjacentes indica repintura. Reflexo continuo e uniforme = original.
+   - textura_casca_laranja: reflexo ondulado/granulado ("casca de laranja"), escorrimento, poeira presa na tinta.
+   - nevoa_em_borrachas_e_frisos: tinta ou nevoa em borrachas de porta/vidro, frisos, plasticos, macanetas,
+     emblemas e cantos internos (encontro de portas, borda do capo). Pintura original nunca invade o acabamento.
+   - vaos_e_alinhamento: frestas de capo, portas, paralamas e tampa desiguais entre os lados; capo mais alto de um
+     lado; peca que parece fora de posicao ou "afundada".
+   - farois_e_lanternas: um farol novo/transparente e o outro amarelado ou riscado; lanterna de tom diferente;
+     encaixe irregular = peca trocada apos batida naquele lado.
+   - parafusos_e_fixacoes: parafusos de paralama, capo, portas e tampa com tinta quebrada, marca de chave ou
+     cabeca sem tinta; suportes de farol com marca de reparo (so quando o cofre/bordas aparecem).
+   - soleiras_e_parte_baixa: soleiras e parte baixa das laterais amassadas, raspadas, com ferrugem ou repintadas.
+   - vidros_e_gravacoes: vidro sem a gravacao da montadora ou com logotipo/data diferente dos demais = vidro trocado.
+   - etiquetas_e_adesivos: etiqueta de fabrica ausente em uma porta/capo enquanto as outras tem; adesivo de
+     pressao de pneu, chassi gravado nos vidros ausente.
+   - sinais_de_enchente: oxidacao em parafusos do banco/cintos, barro ou mancha de agua no carpete e no cofre,
+     embacamento interno de farois, cheiro citado no texto.
+   Regras: luz, sombra e angulo enganam; so marque "evidente" quando a diferenca aparece entre pecas vizinhas na
+   mesma foto e mesma luz. Se a area nao aparece em nenhuma foto, resultado "nao_avaliavel" e liste em
+   areas_sem_foto. Sinais fortes de repintura em UMA peca = batida leve provavel; em varias pecas do mesmo lado
+   = batida maior; capo + os dois paralamas + farois = batida frontal, verificar longarinas pessoalmente.
 5. Mecanica/estado: vazamentos visiveis, pneus desalinhados ou de marcas diferentes, luzes de alerta no painel.
 
 REGRAS
 - Toda conclusao cita a evidencia e o numero da foto. Se as fotos nao permitem avaliar, diga "sem evidencia".
 - Nao invente defeitos. Nao afirme golpe com certeza: indique o risco e como confirmar.
-- Use os defeitos cronicos do modelo (quando informados) para montar o checklist da vistoria presencial.
+- Use os defeitos cronicos do modelo (quando informados) e as areas_sem_foto para montar o checklist da vistoria
+  presencial: cada suspeita de funilaria vira um item "confira pessoalmente X em Y".
+- Todo item de funilaria "suspeito" ou "evidente" tambem entra em alertas (categoria estrutura) com como_verificar.
 - score_confianca: 80-100 sem sinais relevantes; 50-79 pontos a esclarecer; abaixo de 50 sinais fortes de risco.
 - Portugues do Brasil, direto e tecnico.`;
 
