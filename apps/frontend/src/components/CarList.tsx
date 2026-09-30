@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
-import type { CarDTO } from '@caca/shared/types/car';
+import type { CarDTO, WantedCarDTO } from '@caca/shared/types/car';
+import { BotaoVisitar } from './VisitasDoCarro';
 
 function formatNumber(value: number | null, suffix = ''): string {
   if (value === null || !Number.isFinite(value)) return '—';
   return `${value.toLocaleString('pt-BR')}${suffix}`;
 }
 
-export function CarList(props: { cars: CarDTO[] }) {
+export function CarList(props: { cars: CarDTO[]; wantedCar?: WantedCarDTO }) {
   if (!props.cars.length) {
     return (
       <div style={{
@@ -134,6 +135,19 @@ export function CarList(props: { cars: CarDTO[] }) {
                     >
                       🔍 Analisar
                     </Link>
+                    {props.wantedCar && props.wantedCar.yearFrom >= 1950 && (
+                      <BotaoVisitar
+                        compacto
+                        nova={{
+                          marca: props.wantedCar.brand,
+                          modelo: props.wantedCar.model,
+                          ano: car.year >= 1950 ? car.year : props.wantedCar.yearFrom,
+                          versao: props.wantedCar.version,
+                          wantedCarId: props.wantedCar.id,
+                          anuncioUrl: car.url
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>

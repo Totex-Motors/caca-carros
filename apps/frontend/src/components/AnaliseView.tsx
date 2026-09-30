@@ -1,4 +1,5 @@
 import type { Analise, CategoriaAlerta, Funilaria, ResultadoFunilaria, VerificacaoFunilaria } from '../services/dossie-types';
+import { BotaoVisitar } from './VisitasDoCarro';
 import { DossieView, formatBRL, formatRange, GRAVIDADE, ORDEM_GRAVIDADE, ScoreRing, Section, Stat } from './DossieView';
 
 const RECOMENDACAO = {
@@ -201,6 +202,16 @@ export function AnaliseView(props: { analise: Analise; fotosEnviadas: string[] }
         </Section>
         <Section title="Checklist da vistoria">
           <ul className="dx-bullets">{a.checklist_vistoria.map((p) => <li key={p}>☐ {p}</li>)}</ul>
+          {id.marca && id.modelo && id.ano_modelo && (
+            <div style={{ marginTop: 12 }}>
+              <BotaoVisitar
+                nova={{ marca: id.marca, modelo: id.modelo, ano: id.ano_modelo, versao: id.versao, analiseId: r.id, anuncioUrl: r.url }}
+              />
+              <div className="dx-muted" style={{ fontSize: 12, marginTop: 6 }}>
+                Abre um checklist para o celular com a base de vistoria, os pontos fracos deste modelo e as suspeitas levantadas acima.
+              </div>
+            </div>
+          )}
         </Section>
       </div>
 

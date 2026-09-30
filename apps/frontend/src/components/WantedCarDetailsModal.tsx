@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CarDTO, WantedCarDTO } from '@caca/shared/types/car';
 import { CarList } from './CarList';
+import { VisitasDoCarro } from './VisitasDoCarro';
 
 type WantedCarDetailsModalProps = {
   wantedCar: WantedCarDTO;
@@ -332,6 +333,14 @@ export function WantedCarDetailsModal({
                 {statusError && <div className="error" style={{ marginTop: 8 }}>{statusError}</div>}
               </>
             )}
+            {wantedCar.yearFrom >= 1950 && (
+              <div style={{ marginTop: 20 }}>
+                <VisitasDoCarro
+                  wantedCarId={wantedCar.id}
+                  nova={{ marca: wantedCar.brand, modelo: wantedCar.model, ano: wantedCar.yearFrom, versao: wantedCar.version }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -367,7 +376,7 @@ export function WantedCarDetailsModal({
                 Carregando anúncios...
               </div>
             ) : (
-              <CarList cars={cars} />
+              <CarList cars={cars} wantedCar={wantedCar} />
             )}
             {carsError && <div className="error" style={{ marginTop: 8 }}>{carsError}</div>}
           </div>

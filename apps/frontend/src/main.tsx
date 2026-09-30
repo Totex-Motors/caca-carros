@@ -5,6 +5,7 @@ import { App } from './App';
 
 import './styles/global.css';
 import './styles/dossie.css';
+import './styles/visita.css';
 import './styles/dark.css';
 import { aplicarTema, temaAtual } from './services/theme';
 

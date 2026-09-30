@@ -183,3 +183,43 @@ export type Analise = {
   dossie: Dossie | null;
   dossie_erro: string | null;
 };
+
+// ---- Visita presencial (apps/backend/src/core/visita) ----
+
+export type RespostaItem = 'ok' | 'problema' | 'nao_aplica';
+
+export type ItemChecklist = {
+  id: string;
+  texto: string;
+  dica: string;
+  origem: 'base' | 'modelo' | 'anuncio';
+  motivo?: string;
+  resposta: RespostaItem | null;
+  observacao: string;
+  fotos: string[];
+};
+
+export type AreaChecklist = { id: string; titulo: string; icone: string; intro: string; itens: ItemChecklist[] };
+
+export type ParecerVisita = {
+  classificacao: 'aprovado' | 'aprovado_com_ressalvas' | 'reprovado';
+  resumo: string;
+  apontamentos: { area: string; item: string; gravidade: Gravidade; descricao: string; custo_estimado_brl: Faixa; recomendacao: string }[];
+  nao_verificados_relevantes: string[];
+  negociacao: string;
+  proximos_passos: string[];
+};
+
+export type Visita = {
+  id: string;
+  wanted_car_id: string | null;
+  analise_id: string | null;
+  anuncio_url: string | null;
+  veiculo: { marca: string; modelo: string; ano: number; versao: string | null };
+  status: 'em_andamento' | 'concluida';
+  checklist: { versao: number; areas: AreaChecklist[]; perguntas_ao_vendedor: string[] };
+  parecer: ParecerVisita | null;
+  progresso: { respondidos: number; total: number; problemas: number };
+  created_at: string;
+  updated_at: string;
+};

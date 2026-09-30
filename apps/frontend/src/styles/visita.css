@@ -1,0 +1,293 @@
+/* ---- Visita presencial (uso no celular, na frente do carro) ---- */
+
+.vi-container {
+  padding-bottom: 96px; /* espaco para o rodape fixo */
+}
+
+.vi-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.vi-progresso {
+  min-width: 200px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.vi-barra {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.vi-barra > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transition: width 0.3s;
+}
+
+.vi-area {
+  padding: 0;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.vi-area.completa {
+  border-color: rgba(22, 163, 74, 0.35);
+}
+
+.vi-area.com-problema {
+  border-color: rgba(217, 119, 6, 0.45);
+}
+
+.vi-area-head {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  font-weight: 800;
+  user-select: none;
+}
+
+.vi-area-head::-webkit-details-marker {
+  display: none;
+}
+
+.vi-area-head::after {
+  content: '›';
+  font-size: 22px;
+  color: var(--muted);
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+}
+
+.vi-area[open] > .vi-area-head::after {
+  transform: rotate(-90deg);
+}
+
+.vi-area-titulo {
+  font-size: 16px;
+}
+
+.vi-area-conta {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.vi-conta-problema {
+  color: #b45309;
+}
+
+.vi-area-intro {
+  margin: 0;
+  padding: 0 18px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.vi-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+.vi-item {
+  padding: 14px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.vi-item.problema {
+  background: rgba(217, 119, 6, 0.06);
+  border-radius: 12px;
+}
+
+.vi-item.ok .vi-item-texto {
+  color: var(--muted);
+}
+
+.vi-item-texto {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.vi-item-dica {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+.vi-item-motivo {
+  font-size: 12px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.vi-origem {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+}
+
+.vi-origem.modelo {
+  background: var(--accent-light);
+  color: #6d28d9;
+}
+
+.vi-origem.anuncio {
+  background: var(--danger-light);
+  color: #991b1b;
+}
+
+.vi-respostas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vi-resp {
+  height: 44px; /* alvo de toque confortavel */
+  padding: 0 8px;
+  font-size: 13px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  box-shadow: none;
+}
+
+.vi-resp:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+.vi-resp.ativa.ok { background: var(--success-light); border-color: rgba(22, 163, 74, 0.5); color: #166534; }
+.vi-resp.ativa.problema { background: #fef3c7; border-color: rgba(217, 119, 6, 0.6); color: #92400e; }
+.vi-resp.ativa.na { background: var(--surface); border-color: var(--muted); color: var(--muted); }
+
+.vi-detalhe {
+  margin-top: 10px;
+}
+
+.vi-obs {
+  min-height: 72px;
+  margin-top: 0;
+}
+
+.vi-foto-btn {
+  height: 64px;
+  width: 84px;
+  border-radius: 12px;
+  font-size: 13px;
+  padding: 0;
+}
+
+.vi-rodape {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(12, 26, 46, 0.08);
+}
+
+.vi-rodape button {
+  height: 44px;
+}
+
+.vi-salvo {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.vi-salvo.erro {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.vi-salvo.salvo {
+  color: var(--success);
+}
+
+/* Lista de visitas (detalhe do carro desejado) */
+.vi-lista-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vi-resumo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.vi-resumo:hover {
+  text-decoration: none;
+  border-color: var(--primary);
+}
+
+@media (max-width: 640px) {
+  .vi-respostas {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .vi-resp {
+    font-size: 12px;
+    padding: 0 4px;
+  }
+
+  .vi-rodape {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    text-align: center;
+  }
+}
+
+/* Tema escuro */
+html[data-theme='dark'] .vi-item.problema { background: rgba(250, 204, 21, 0.07); }
+html[data-theme='dark'] .vi-resp.ativa.ok { background: rgba(74, 222, 128, 0.14); color: #86efac; border-color: rgba(74, 222, 128, 0.4); }
+html[data-theme='dark'] .vi-resp.ativa.problema { background: rgba(250, 204, 21, 0.14); color: #fde047; border-color: rgba(250, 204, 21, 0.4); }
+html[data-theme='dark'] .vi-origem.modelo { color: #c4b5fd; }
+html[data-theme='dark'] .vi-origem.anuncio { color: #fca5a5; }
+html[data-theme='dark'] .vi-conta-problema { color: #fde047; }
+html[data-theme='dark'] .vi-rodape { box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4); }
