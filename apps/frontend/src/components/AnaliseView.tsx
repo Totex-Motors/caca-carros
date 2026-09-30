@@ -1,4 +1,5 @@
-import type { Analise, CategoriaAlerta } from '../services/dossie-types';
+import type { Analise, CategoriaAlerta, Funilaria, ResultadoFunilaria, VerificacaoFunilaria } from '../services/dossie-types';
+import { BotaoVisitar } from './VisitasDoCarro';
 import { DossieView, formatBRL, formatRange, GRAVIDADE, ORDEM_GRAVIDADE, ScoreRing, Section, Stat } from './DossieView';
 
 const RECOMENDACAO = {
@@ -31,6 +32,72 @@ const PRECO = {
   dentro: { label: 'Dentro da faixa FIPE', tone: 'ok' },
   acima: { label: 'Acima da FIPE', tone: 'info' }
 } as const;
+
+const VERIFICACAO_FUNILARIA: Record<VerificacaoFunilaria, { titulo: string; dica: string }> = {
+  tom_e_brilho: { titulo: 'Tom e brilho entre peças', dica: 'Peças vizinhas sob a mesma luz devem ter a mesma cor e o mesmo reflexo.' },
+  textura_casca_laranja: { titulo: 'Textura da pintura', dica: 'Reflexo ondulado ("casca de laranja"), escorrimento ou poeira presa indicam repintura.' },
+  nevoa_em_borrachas_e_frisos: { titulo: 'Névoa em borrachas e frisos', dica: 'Pintura original nunca invade borrachas, frisos, plásticos e cantos.' },
+  vaos_e_alinhamento: { titulo: 'Vãos e alinhamento', dica: 'Frestas de capô, portas e tampa iguais dos dois lados.' },
+  farois_e_lanternas: { titulo: 'Faróis e lanternas', dica: 'Um farol novo e o outro amarelado sugere troca após batida daquele lado.' },
+  parafusos_e_fixacoes: { titulo: 'Parafusos e fixações', dica: 'Tinta quebrada ou marca de chave em parafusos de para-lama, capô e portas.' },
+  soleiras_e_parte_baixa: { titulo: 'Soleiras e parte baixa', dica: 'Amassados, raspões, ferrugem ou repintura na base das laterais.' },
+  vidros_e_gravacoes: { titulo: 'Vidros e gravações', dica: 'Vidro sem a gravação da montadora, ou com data diferente, foi trocado.' },
+  etiquetas_e_adesivos: { titulo: 'Etiquetas e adesivos', dica: 'Etiqueta de fábrica faltando em uma porta ou no capô.' },
+  sinais_de_enchente: { titulo: 'Sinais de enchente', dica: 'Oxidação em parafusos internos, barro ou mancha no carpete, farol embaçado.' }
+};
+
+const RESULTADO_FUNILARIA: Record<ResultadoFunilaria, { label: string; tone: string; icone: string }> = {
+  sem_sinais: { label: 'Sem sinais', tone: 'ok', icone: '✅' },
+  suspeito: { label: 'Suspeito', tone: 'warn', icone: '⚠️' },
+  evidente: { label: 'Evidente', tone: 'bad', icone: '⛔' },
+  nao_avaliavel: { label: 'Sem foto da área', tone: '', icone: '👁️' }
+};
+
+const AVALIACAO_FUNILARIA = {
+  sem_sinais: { label: 'Sem sinais de repintura ou batida nas fotos', tone: 'ok' },
+  sinais_leves: { label: 'Sinais leves: confira pessoalmente', tone: 'warn' },
+  sinais_fortes: { label: 'Sinais fortes de repintura ou batida', tone: 'bad' },
+  sem_evidencia: { label: 'Fotos não permitem avaliar a funilaria', tone: '' }
+} as const;
+
+const ORDEM_RESULTADO: ResultadoFunilaria[] = ['evidente', 'suspeito', 'sem_sinais', 'nao_avaliavel'];
+
+function FunilariaSection({ funilaria }: { funilaria: Funilaria }) {
+  const avaliacao = AVALIACAO_FUNILARIA[funilaria.avaliacao];
+  const verificacoes = [...funilaria.verificacoes].sort(
+    (x, y) => ORDEM_RESULTADO.indexOf(x.resultado) - ORDEM_RESULTADO.indexOf(y.resultado)
+  );
+  return (
+    <Section title="Funilaria e pintura">
+      <div className="dx-chips" style={{ marginTop: 0, marginBottom: 8 }}>
+        <span className={`dx-chip ${avaliacao.tone}`}>{avaliacao.label}</span>
+      </div>
+      <p className="dx-p" style={{ marginBottom: 10 }}>{funilaria.resumo}</p>
+      <ul className="dx-list">
+        {verificacoes.map((v) => {
+          const meta = VERIFICACAO_FUNILARIA[v.item] ?? { titulo: v.item, dica: '' };
+          const res = RESULTADO_FUNILARIA[v.resultado];
+          return (
+            <li key={v.item}>
+              <div className="dx-row">
+                <strong>{meta.titulo}</strong>
+                <span className={`dx-chip ${res.tone}`}>{res.icone} {res.label}</span>
+              </div>
+              {v.pecas.length > 0 && <div className="dx-chips">{v.pecas.map((p) => <span key={p} className="dx-chip">{p}</span>)}</div>}
+              <p className="dx-p">{v.resultado === 'nao_avaliavel' && !v.evidencia ? meta.dica : v.evidencia}</p>
+              {v.resultado !== 'nao_avaliavel' && <p className="dx-p dx-muted" style={{ fontSize: 12 }}>{meta.dica}</p>}
+            </li>
+          );
+        })}
+      </ul>
+      {funilaria.areas_sem_foto.length > 0 && (
+        <div className="dx-callout" style={{ marginTop: 12 }}>
+          <strong>Veja pessoalmente:</strong> o anúncio não mostra {funilaria.areas_sem_foto.join(', ')}.
+        </div>
+      )}
+    </Section>
+  );
+}
 
 export function AnaliseView(props: { analise: Analise; fotosEnviadas: string[] }) {
   const { analise: r } = props;
@@ -94,6 +161,8 @@ export function AnaliseView(props: { analise: Analise; fotosEnviadas: string[] }
         ))}
       </Section>
 
+      {a.funilaria && <FunilariaSection funilaria={a.funilaria} />}
+
       <div className="dx-grid-2">
         <Section title="Quilometragem">
           <span className={`dx-chip ${KM[a.km.compatibilidade].tone}`}>{KM[a.km.compatibilidade].label}</span>
@@ -133,6 +202,16 @@ export function AnaliseView(props: { analise: Analise; fotosEnviadas: string[] }
         </Section>
         <Section title="Checklist da vistoria">
           <ul className="dx-bullets">{a.checklist_vistoria.map((p) => <li key={p}>☐ {p}</li>)}</ul>
+          {id.marca && id.modelo && id.ano_modelo && (
+            <div style={{ marginTop: 12 }}>
+              <BotaoVisitar
+                nova={{ marca: id.marca, modelo: id.modelo, ano: id.ano_modelo, versao: id.versao, analiseId: r.id, anuncioUrl: r.url }}
+              />
+              <div className="dx-muted" style={{ fontSize: 12, marginTop: 6 }}>
+                Abre um checklist para o celular com a base de vistoria, os pontos fracos deste modelo e as suspeitas levantadas acima.
+              </div>
+            </div>
+          )}
         </Section>
       </div>
 

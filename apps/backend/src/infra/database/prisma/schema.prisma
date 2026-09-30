@@ -123,3 +123,30 @@ model AnaliseAnuncio {
   @@index([url])
   @@map("analises_anuncio")
 }
+
+enum VisitaStatus {
+  EM_ANDAMENTO
+  CONCLUIDA
+}
+
+// Checklist de visita presencial a um carro (base fixa + itens do dossie e da analise do anuncio), com respostas,
+// fotos e o parecer final da IA. Ligado ao carro desejado e/ou a analise do anuncio de origem.
+model Visita {
+  id          String       @id @default(uuid())
+  wantedCarId String?      @map("wanted_car_id")
+  analiseId   String?      @map("analise_id")
+  anuncioUrl  String?      @map("anuncio_url")
+  marca       String
+  modelo      String
+  ano         Int
+  versao      String?
+  status      VisitaStatus @default(EM_ANDAMENTO)
+  checklist   Json
+  parecer     Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@index([wantedCarId])
+  @@index([createdAt])
+  @@map("visitas")
+}

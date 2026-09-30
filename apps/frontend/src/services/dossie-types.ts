@@ -110,6 +110,27 @@ export type Dossie = {
 
 export type CategoriaAlerta = 'golpe' | 'km' | 'preco' | 'divergencia' | 'estrutura' | 'mecanica' | 'documentacao' | 'outro';
 
+export type VerificacaoFunilaria =
+  | 'tom_e_brilho'
+  | 'textura_casca_laranja'
+  | 'nevoa_em_borrachas_e_frisos'
+  | 'vaos_e_alinhamento'
+  | 'farois_e_lanternas'
+  | 'parafusos_e_fixacoes'
+  | 'soleiras_e_parte_baixa'
+  | 'vidros_e_gravacoes'
+  | 'etiquetas_e_adesivos'
+  | 'sinais_de_enchente';
+
+export type ResultadoFunilaria = 'sem_sinais' | 'suspeito' | 'evidente' | 'nao_avaliavel';
+
+export type Funilaria = {
+  avaliacao: 'sem_sinais' | 'sinais_leves' | 'sinais_fortes' | 'sem_evidencia';
+  resumo: string;
+  verificacoes: { item: VerificacaoFunilaria; resultado: ResultadoFunilaria; pecas: string[]; evidencia: string }[];
+  areas_sem_foto: string[];
+};
+
 export type AnaliseIA = {
   resumo: string;
   score_confianca: number;
@@ -123,6 +144,8 @@ export type AnaliseIA = {
   };
   alertas: { categoria: CategoriaAlerta; gravidade: Gravidade; titulo: string; evidencia: string; como_verificar: string }[];
   pontos_positivos: string[];
+  // Ausente em analises salvas antes desta versao.
+  funilaria?: Funilaria;
   fotos: { foto: number; observacao: string }[];
   perguntas_ao_vendedor: string[];
   checklist_vistoria: string[];
@@ -159,4 +182,44 @@ export type Analise = {
   analise: AnaliseIA;
   dossie: Dossie | null;
   dossie_erro: string | null;
+};
+
+// ---- Visita presencial (apps/backend/src/core/visita) ----
+
+export type RespostaItem = 'ok' | 'problema' | 'nao_aplica';
+
+export type ItemChecklist = {
+  id: string;
+  texto: string;
+  dica: string;
+  origem: 'base' | 'modelo' | 'anuncio';
+  motivo?: string;
+  resposta: RespostaItem | null;
+  observacao: string;
+  fotos: string[];
+};
+
+export type AreaChecklist = { id: string; titulo: string; icone: string; intro: string; itens: ItemChecklist[] };
+
+export type ParecerVisita = {
+  classificacao: 'aprovado' | 'aprovado_com_ressalvas' | 'reprovado';
+  resumo: string;
+  apontamentos: { area: string; item: string; gravidade: Gravidade; descricao: string; custo_estimado_brl: Faixa; recomendacao: string }[];
+  nao_verificados_relevantes: string[];
+  negociacao: string;
+  proximos_passos: string[];
+};
+
+export type Visita = {
+  id: string;
+  wanted_car_id: string | null;
+  analise_id: string | null;
+  anuncio_url: string | null;
+  veiculo: { marca: string; modelo: string; ano: number; versao: string | null };
+  status: 'em_andamento' | 'concluida';
+  checklist: { versao: number; areas: AreaChecklist[]; perguntas_ao_vendedor: string[] };
+  parecer: ParecerVisita | null;
+  progresso: { respondidos: number; total: number; problemas: number };
+  created_at: string;
+  updated_at: string;
 };
